@@ -1,0 +1,278 @@
+<script setup lang="ts">
+import type { AiProvider } from '@/types/user-settings'
+import { useSessionStore, useUserSettingsStore } from '@/store'
+import { formatDateTime } from '@/utils/stock'
+
+const router = useRouter()
+const sessionStore = useSessionStore()
+const userSettingsStore = useUserSettingsStore()
+
+const saveErrors = ref<string[]>([])
+const apiTokenInput = ref('')
+
+const providerOptions = [
+  { label: 'OpenAI', value: 'openai' },
+  { label: 'DeepSeek', value: 'deepseek' },
+  { label: 'Custom', value: 'custom' },
+]
+
+const username = computed(() => sessionStore.currentUser?.username || '')
+const roleText = computed(() => sessionStore.isSuperAdmin ? '管理员' : '普通用户')
+const lastSavedAt = computed(() => {
+  if (!userSettingsStore.settings.updatedAt)
+    return '--'
+  return formatDateTime(userSettingsStore.settings.updatedAt)
+})
+
+function syncTokenInput() {
+  const ai = userSettingsStore.settings.ai
+  apiTokenInput.value = ai.hasToken
+    ? (ai.apiTokenMasked || '******')
+    : ''
+}
+
+watch(() => userSettingsStore.settings.ai.provider, (value) => {
+  if (value === 'openai' && !userSettingsStore.settings.ai.baseUrl.trim()) {
+    userSettingsStore.settings.ai.baseUrl = 'https://api.openai.com/v1'
+  }
+  if (value === 'deepseek' && !userSettingsStore.settings.ai.baseUrl.trim()) {
+    userSettingsStore.settings.ai.baseUrl = 'https://api.deepseek.com'
+  }
+})
+
+function validate(): string[] {
+  const issues: string[] = []
+  const settings = userSettingsStore.settings
+
+  if (!Number.isFinite(settings.simulation.initialCapital) || settings.simulation.initialCapital <= 0)
+    issues.push('初始资金必须大于 0')
+
+  if (!settings.ai.baseUrl.trim())
+    issues.push('请填写 AI Base URL')
+  if (!settings.ai.model.trim())
+    issues.push('请填写 AI 模型名称')
+
+  if (settings.strategy.positionMaxPct < 0 || settings.strategy.positionMaxPct > 100)
+    issues.push('仓位上限需在 0-100 之间')
+  if (settings.strategy.stopLossPct < 0 || settings.strategy.stopLossPct > 100)
+    issues.push('止损阈值需在 0-100 之间')
+  if (settings.strategy.takeProfitPct < 0 || settings.strategy.takeProfitPct > 100)
+    issues.push('止盈阈值需在 0-100 之间')
+
+  return issues
+}
+
+function handleProviderChange(value: string) {
+  const provider = value as AiProvider
+  userSettingsStore.settings.ai.provider = provider
+  if (provider === 'openai' && !userSettingsStore.settings.ai.baseUrl.trim()) {
+    userSettingsStore.settings.ai.baseUrl = 'https://api.openai.com/v1'
+  }
+  if (provider === 'deepseek' && !userSettingsStore.settings.ai.baseUrl.trim()) {
+    userSettingsStore.settings.ai.baseUrl = 'https://api.deepseek.com'
+  }
+}
+
+async function load() {
+  try {
+    await userSettingsStore.fetchMySettings()
+    syncTokenInput()
+  }
+  catch {}
+}
+
+async function save() {
+  saveErrors.value = validate()
+  if (saveErrors.value.length > 0)
+    return
+
+  const result = await userSettingsStore.saveMySettings({
+    simulation: {
+      accountName: userSettingsStore.settings.simulation.accountName,
+      accountId: userSettingsStore.settings.simulation.accountId,
+      initialCapital: userSettingsStore.settings.simulation.initialCapital,
+      note: userSettingsStore.settings.simulation.note,
+    },
+    ai: {
+      provider: userSettingsStore.settings.ai.provider,
+      baseUrl: userSettingsStore.settings.ai.baseUrl,
+      model: userSettingsStore.settings.ai.model,
+      apiToken: apiTokenInput.value,
+    },
+    strategy: {
+      positionMaxPct: userSettingsStore.settings.strategy.positionMaxPct,
+      stopLossPct: userSettingsStore.settings.strategy.stopLossPct,
+      takeProfitPct: userSettingsStore.settings.strategy.takeProfitPct,
+    },
+  })
+
+  if (!result.success) {
+    window.$message.error(result.error || '保存失败')
+    return
+  }
+
+  syncTokenInput()
+  window.$message.success('个人设置已保存到你的账户配置')
+}
+
+function reloadFromServer() {
+  window.$dialog.warning({
+    title: '重新加载确认',
+    content: '将丢弃未保存修改，并从服务器重新加载个人设置，是否继续？',
+    positiveText: '确认',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      saveErrors.value = []
+      void load()
+    },
+  })
+}
+
+onMounted(() => {
+  void load()
+})
+</script>
+
+<template>
+  <n-space vertical :size="16">
+    <n-card title="我的设置" size="small">
+      <template #header-extra>
+        <n-button quaternary @click="router.push('/profile/trading')">
+          前往交易账户中心
+        </n-button>
+      </template>
+      <n-space justify="space-between" align="center" :wrap="true">
+        <n-space align="center">
+          <n-tag type="info">
+            用户：{{ username || '--' }}
+          </n-tag>
+          <n-tag type="success">
+            角色：{{ roleText }}
+          </n-tag>
+        </n-space>
+        <n-text depth="3">
+          最后保存：{{ lastSavedAt }}
+        </n-text>
+      </n-space>
+      <n-alert type="info" class="mt-3">
+        此处仅影响 Agent 的 paper 运行默认参数，不是交易账户绑定；交易账户请到交易账户中心管理。
+      </n-alert>
+      <n-alert v-if="userSettingsStore.error" type="error" class="mt-3">
+        {{ userSettingsStore.error }}
+      </n-alert>
+    </n-card>
+
+    <n-spin :show="userSettingsStore.loading">
+      <n-space vertical :size="16">
+        <n-card title="Paper 运行参数" size="small">
+          <n-alert type="info" class="mb-3">
+            这里是 paper 模式默认参数，不会绑定或修改券商交易账户。
+          </n-alert>
+          <n-grid :cols="24" :x-gap="16" :y-gap="12" responsive="screen">
+            <n-grid-item :span="24" :l-span="12">
+              <n-form-item label="初始资金">
+                <n-input-number v-model:value="userSettingsStore.settings.simulation.initialCapital" :min="1" :precision="2" class="w-full" />
+              </n-form-item>
+            </n-grid-item>
+            <n-grid-item :span="24">
+              <n-form-item label="备注">
+                <n-input
+                  v-model:value="userSettingsStore.settings.simulation.note"
+                  type="textarea"
+                  :autosize="{ minRows: 2, maxRows: 4 }"
+                  placeholder="可选，记录该模拟盘用途"
+                />
+              </n-form-item>
+            </n-grid-item>
+          </n-grid>
+          <n-collapse class="mt-2">
+            <n-collapse-item title="高级参数（可选）" name="simulation-advanced">
+              <n-grid :cols="24" :x-gap="16" :y-gap="12" responsive="screen">
+                <n-grid-item :span="24" :l-span="12">
+                  <n-form-item label="账户名称">
+                    <n-input v-model:value="userSettingsStore.settings.simulation.accountName" placeholder="例如：我的模拟盘A" />
+                  </n-form-item>
+                </n-grid-item>
+                <n-grid-item :span="24" :l-span="12">
+                  <n-form-item label="账户 ID">
+                    <n-input v-model:value="userSettingsStore.settings.simulation.accountId" placeholder="例如：SIM-001" />
+                  </n-form-item>
+                </n-grid-item>
+              </n-grid>
+            </n-collapse-item>
+          </n-collapse>
+        </n-card>
+
+        <n-card title="个人 AI 配置" size="small">
+          <n-grid :cols="24" :x-gap="16" :y-gap="12" responsive="screen">
+            <n-grid-item :span="24" :l-span="8">
+              <n-form-item label="提供商">
+                <n-select
+                  v-model:value="userSettingsStore.settings.ai.provider"
+                  :options="providerOptions"
+                  @update:value="handleProviderChange"
+                />
+              </n-form-item>
+            </n-grid-item>
+            <n-grid-item :span="24" :l-span="16">
+              <n-form-item label="Base URL">
+                <n-input v-model:value="userSettingsStore.settings.ai.baseUrl" placeholder="例如：https://api.openai.com/v1" />
+              </n-form-item>
+            </n-grid-item>
+            <n-grid-item :span="24" :l-span="12">
+              <n-form-item label="模型">
+                <n-input v-model:value="userSettingsStore.settings.ai.model" placeholder="例如：gpt-4o-mini / deepseek-chat" />
+              </n-form-item>
+            </n-grid-item>
+            <n-grid-item :span="24" :l-span="12">
+              <n-form-item label="API Token">
+                <n-input
+                  v-model:value="apiTokenInput"
+                  type="password"
+                  show-password-on="click"
+                  placeholder="留空清除，保持 ****** 表示不修改"
+                />
+              </n-form-item>
+            </n-grid-item>
+          </n-grid>
+        </n-card>
+
+        <n-card title="个人策略参数" size="small">
+          <n-grid :cols="24" :x-gap="16" :y-gap="12" responsive="screen">
+            <n-grid-item :span="24" :l-span="8">
+              <n-form-item label="仓位上限(%)">
+                <n-input-number v-model:value="userSettingsStore.settings.strategy.positionMaxPct" :min="0" :max="100" class="w-full" />
+              </n-form-item>
+            </n-grid-item>
+            <n-grid-item :span="24" :l-span="8">
+              <n-form-item label="止损阈值(%)">
+                <n-input-number v-model:value="userSettingsStore.settings.strategy.stopLossPct" :min="0" :max="100" class="w-full" />
+              </n-form-item>
+            </n-grid-item>
+            <n-grid-item :span="24" :l-span="8">
+              <n-form-item label="止盈阈值(%)">
+                <n-input-number v-model:value="userSettingsStore.settings.strategy.takeProfitPct" :min="0" :max="100" class="w-full" />
+              </n-form-item>
+            </n-grid-item>
+          </n-grid>
+        </n-card>
+
+        <n-card size="small">
+          <n-space vertical :size="8">
+            <n-alert v-for="issue in saveErrors" :key="issue" type="error">
+              {{ issue }}
+            </n-alert>
+            <n-space justify="end">
+              <n-button @click="reloadFromServer">
+                重新加载
+              </n-button>
+              <n-button type="primary" :loading="userSettingsStore.saving" @click="save">
+                保存设置
+              </n-button>
+            </n-space>
+          </n-space>
+        </n-card>
+      </n-space>
+    </n-spin>
+  </n-space>
+</template>
