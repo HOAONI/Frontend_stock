@@ -2,8 +2,7 @@ export interface AnalysisRequest {
   stockCode: string
   reportType?: 'simple' | 'detailed'
   forceRefresh?: boolean
-  executionMode?: 'auto' | 'paper' | 'broker'
-  brokerAccountId?: number
+  executionMode?: 'auto' | 'paper'
 }
 
 export interface ReportMeta {

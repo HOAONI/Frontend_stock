@@ -1,58 +1,38 @@
 <script setup lang="ts">
 import type { DataTableColumns } from 'naive-ui'
-import type { BrokerAccountItem, BrokerAccountStatus } from '@/types/broker-account'
 import { useBrokerAccountStore, useTradingAccountStore } from '@/store'
 import { formatDateTime, formatPct } from '@/utils/stock'
 
 const brokerAccountStore = useBrokerAccountStore()
 const tradingAccountStore = useTradingAccountStore()
 
-const selectedRowId = ref<number | null>(null)
 const forcingRefresh = ref(false)
+const binding = ref(false)
+const failedWithHistoricalAccountUid = ref(false)
 
-const createVisible = ref(false)
-const editVisible = ref(false)
-const submitting = ref(false)
-
-const createForm = reactive({
-  brokerCode: 'futu',
-  environment: 'paper',
+const bindForm = reactive({
   accountUid: '',
   accountDisplayName: '',
-  credentialsText: '{\n  \n}',
+  initialCapital: 100000,
+  commissionRate: 0.0003,
+  slippageBps: 2,
 })
 
-const editForm = reactive({
-  id: 0,
-  accountDisplayName: '',
-  status: 'active' as BrokerAccountStatus,
-  updateCredentials: false,
-  credentialsText: '{\n  \n}',
+const simulationStatus = computed(() => brokerAccountStore.simulationStatus)
+const overviewMeta = computed(() => tradingAccountStore.performance || tradingAccountStore.summary)
+const hasHistoricalAccountUid = computed(() => {
+  const statusAccountUid = simulationStatus.value?.accountUid?.trim()
+  return Boolean(statusAccountUid && bindForm.accountUid.trim() && bindForm.accountUid.trim() === statusAccountUid)
 })
+const bindInlineError = computed(() => brokerAccountStore.bindError || brokerAccountStore.error)
 
-const selectedAccountId = computed<number | null>({
-  get() {
-    return brokerAccountStore.selectedAccountId
-  },
-  set(value) {
-    brokerAccountStore.setSelectedAccount(value)
-  },
+const accountStatusText = computed(() => {
+  if (!simulationStatus.value?.isBound)
+    return '未初始化模拟账户'
+  if (!simulationStatus.value?.isVerified)
+    return '模拟账户待校验'
+  return '模拟账户已就绪'
 })
-
-const activeAccountOptions = computed(() => {
-  return brokerAccountStore.activeAccounts.map(item => ({
-    label: `${item.accountDisplayName || item.accountUid} (${item.brokerCode})${item.isVerified ? '' : ' · 未校验'}`,
-    value: item.id,
-  }))
-})
-
-const currentSelectedRow = computed(() => {
-  if (!selectedRowId.value)
-    return null
-  return brokerAccountStore.items.find(item => item.id === selectedRowId.value) || null
-})
-
-const currentTradingAccount = computed(() => brokerAccountStore.selectedAccount)
 
 function toNumber(value: unknown): number | null {
   const n = Number(value)
@@ -84,8 +64,8 @@ const overviewMetrics = computed(() => {
   }
 })
 
-const overviewMeta = computed(() => {
-  return tradingAccountStore.performance || tradingAccountStore.summary
+const canLoadTradingData = computed(() => {
+  return Boolean(simulationStatus.value?.isBound && simulationStatus.value?.isVerified)
 })
 
 function formatAmount(value: number | null | undefined): string {
@@ -117,270 +97,128 @@ function buildDynamicColumns(items: Array<Record<string, unknown>>): DataTableCo
   })
 }
 
-const accountColumns: DataTableColumns<BrokerAccountItem> = [
-  { title: 'ID', key: 'id' },
-  { title: '券商', key: 'brokerCode' },
-  { title: '账户UID', key: 'accountUid' },
-  {
-    title: '显示名',
-    key: 'accountDisplayName',
-    render: row => row.accountDisplayName || '--',
-  },
-  { title: '状态', key: 'status' },
-  {
-    title: '校验状态',
-    key: 'isVerified',
-    render: row => (row.isVerified ? '已校验' : '未校验'),
-  },
-  {
-    title: '更新时间',
-    key: 'updatedAt',
-    render: row => formatDateTime(row.updatedAt),
-  },
-]
-
 const positionsColumns = computed(() => buildDynamicColumns(tradingAccountStore.positions?.items || []))
 const ordersColumns = computed(() => buildDynamicColumns(tradingAccountStore.orders?.items || []))
 const tradesColumns = computed(() => buildDynamicColumns(tradingAccountStore.trades?.items || []))
 
-function parseCredentials(text: string): { valid: boolean, data?: Record<string, unknown>, message?: string } {
+function validateBindForm(): string | null {
+  if (!Number.isFinite(bindForm.initialCapital) || bindForm.initialCapital <= 0)
+    return '初始资金必须大于 0'
+  if (!Number.isFinite(bindForm.commissionRate) || bindForm.commissionRate < 0)
+    return '手续费率必须大于等于 0'
+  if (!Number.isFinite(bindForm.slippageBps) || bindForm.slippageBps < 0)
+    return '滑点(bps)必须大于等于 0'
+  return null
+}
+
+async function loadSimulationStatus(silent = false): Promise<boolean> {
   try {
-    const parsed = JSON.parse(text)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return {
-        valid: false,
-        message: '凭据必须是 JSON 对象',
-      }
-    }
-    if (Object.keys(parsed).length === 0) {
-      return {
-        valid: false,
-        message: '凭据对象不能为空',
-      }
-    }
-    return {
-      valid: true,
-      data: parsed as Record<string, unknown>,
-    }
+    await brokerAccountStore.loadSimulationStatus()
+    syncBindFormFromStatus()
+    return true
   }
   catch {
-    return {
-      valid: false,
-      message: '凭据 JSON 格式无效',
-    }
+    if (!silent)
+      window.$message.error(brokerAccountStore.error || '加载模拟盘账户状态失败')
+    return false
   }
 }
 
-async function loadAccounts() {
-  try {
-    await brokerAccountStore.loadAccounts()
-    if (selectedRowId.value == null && brokerAccountStore.items.length > 0)
-      selectedRowId.value = brokerAccountStore.items[0].id
+async function refreshTradingData(refresh = false, silent = false): Promise<void> {
+  if (!canLoadTradingData.value) {
+    tradingAccountStore.clearData()
+    return
   }
-  catch {
-    window.$message.error(brokerAccountStore.error || '加载券商账户失败')
-  }
-}
 
-async function loadTradingData(refresh = false, notifyError = true) {
-  const result = await tradingAccountStore.loadAll({
-    brokerAccountId: selectedAccountId.value,
-    refresh,
-  })
-
-  if (!result.success && notifyError && result.error && result.error !== 'stale_request') {
+  const result = await tradingAccountStore.loadAll({ refresh })
+  if (!result.success && !silent && result.error && result.error !== 'stale_request')
     window.$message.error(result.error)
+}
+
+async function loadStatusAndData(silent = false): Promise<void> {
+  const ok = await loadSimulationStatus(silent)
+  if (!ok)
+    return
+  await refreshTradingData(false, silent)
+}
+
+function syncBindFormFromStatus() {
+  const status = simulationStatus.value
+  if (!bindForm.accountUid.trim() && status?.accountUid) {
+    bindForm.accountUid = status.accountUid
+  }
+  if (!bindForm.accountDisplayName.trim() && status?.accountDisplayName) {
+    bindForm.accountDisplayName = status.accountDisplayName
   }
 }
 
-function openCreate() {
-  createForm.brokerCode = 'futu'
-  createForm.environment = 'paper'
-  createForm.accountUid = ''
-  createForm.accountDisplayName = ''
-  createForm.credentialsText = '{\n  \n}'
-  createVisible.value = true
+function clearAccountUidInput() {
+  bindForm.accountUid = ''
 }
 
-function openEdit() {
-  const row = currentSelectedRow.value
-  if (!row) {
-    window.$message.warning('请先在表格中选择一个账户')
+async function bindSimulationAccountNow() {
+  brokerAccountStore.clearBindError()
+  failedWithHistoricalAccountUid.value = false
+
+  const validationError = validateBindForm()
+  if (validationError) {
+    window.$message.error(validationError)
     return
   }
 
-  editForm.id = row.id
-  editForm.accountDisplayName = row.accountDisplayName || ''
-  editForm.status = row.status
-  editForm.updateCredentials = false
-  editForm.credentialsText = '{\n  \n}'
-  editVisible.value = true
-}
-
-async function submitCreate() {
-  if (!createForm.brokerCode.trim()) {
-    window.$message.error('券商代码不能为空')
-    return
-  }
-  if (!createForm.accountUid.trim()) {
-    window.$message.error('账户UID不能为空')
-    return
-  }
-
-  const parsed = parseCredentials(createForm.credentialsText)
-  if (!parsed.valid) {
-    window.$message.error(parsed.message || '凭据格式错误')
-    return
-  }
-
-  submitting.value = true
+  binding.value = true
   try {
-    const created = await brokerAccountStore.createAccount({
-      brokerCode: createForm.brokerCode.trim(),
-      environment: 'paper',
-      accountUid: createForm.accountUid.trim(),
-      accountDisplayName: createForm.accountDisplayName.trim() || undefined,
-      credentials: parsed.data!,
+    await brokerAccountStore.bindSimulation({
+      accountUid: bindForm.accountUid.trim() || undefined,
+      accountDisplayName: bindForm.accountDisplayName.trim() || undefined,
+      initialCapital: Number(bindForm.initialCapital),
+      commissionRate: Number(bindForm.commissionRate),
+      slippageBps: Number(bindForm.slippageBps),
     })
-    createVisible.value = false
-    selectedRowId.value = created.id
-    await loadTradingData(false, false)
-    window.$message.success('账户创建成功')
+    await refreshTradingData(true, true)
+    window.$message.success('Backtrader 模拟账户初始化成功')
   }
   catch {
-    window.$message.error(brokerAccountStore.error || '创建账户失败')
+    if (hasHistoricalAccountUid.value)
+      failedWithHistoricalAccountUid.value = true
+    window.$message.error(brokerAccountStore.error || '模拟盘初始化失败')
   }
   finally {
-    submitting.value = false
+    binding.value = false
   }
 }
-
-async function submitEdit() {
-  submitting.value = true
-  try {
-    let credentials: Record<string, unknown> | undefined
-    if (editForm.updateCredentials) {
-      const parsed = parseCredentials(editForm.credentialsText)
-      if (!parsed.valid) {
-        window.$message.error(parsed.message || '凭据格式错误')
-        return
-      }
-      credentials = parsed.data
-    }
-
-    await brokerAccountStore.updateAccount(editForm.id, {
-      accountDisplayName: editForm.accountDisplayName.trim() || undefined,
-      status: editForm.status,
-      ...(credentials
-        ? {
-            credentials,
-          }
-        : {}),
-    })
-    editVisible.value = false
-    await loadTradingData(false, false)
-    window.$message.success('账户更新成功')
-  }
-  catch {
-    window.$message.error(brokerAccountStore.error || '更新账户失败')
-  }
-  finally {
-    submitting.value = false
-  }
-}
-
-function verifyCurrent() {
-  const row = currentSelectedRow.value
-  if (!row) {
-    window.$message.warning('请先选择账户')
-    return
-  }
-  if (row.status !== 'active') {
-    window.$message.warning('请先启用该账户后再校验')
-    return
-  }
-
-  window.$dialog.info({
-    title: '账户校验',
-    content: `确认校验账户 ${row.accountUid} 吗？`,
-    positiveText: '确认',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      try {
-        await brokerAccountStore.verifyAccount(row.id)
-        selectedRowId.value = row.id
-        await loadTradingData(true, false)
-        window.$message.success('账户校验通过')
-      }
-      catch {
-        window.$message.error(brokerAccountStore.error || '账户校验失败')
-      }
-    },
-  })
-}
-
-function removeCurrent() {
-  const row = currentSelectedRow.value
-  if (!row) {
-    window.$message.warning('请先选择账户')
-    return
-  }
-
-  window.$dialog.warning({
-    title: '删除确认',
-    content: `确认删除账户 ${row.accountUid} 吗？`,
-    positiveText: '确认',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      try {
-        await brokerAccountStore.removeAccount(row.id)
-        if (selectedRowId.value === row.id)
-          selectedRowId.value = brokerAccountStore.items[0]?.id || null
-        await loadTradingData(false, false)
-        window.$message.success('账户已删除')
-      }
-      catch {
-        window.$message.error(brokerAccountStore.error || '删除账户失败')
-      }
-    },
-  })
-}
-
-function onAccountRowClick(row: BrokerAccountItem) {
-  selectedRowId.value = row.id
-  if (row.status === 'active')
-    brokerAccountStore.setSelectedAccount(row.id)
-}
-
-watch(
-  () => brokerAccountStore.selectedAccountId,
-  () => {
-    void loadTradingData(false, false)
-  },
-)
 
 onMounted(async () => {
-  await loadAccounts()
-  await loadTradingData(false, false)
+  await loadStatusAndData(true)
+})
+
+watch(() => bindForm.accountUid, () => {
+  if (!hasHistoricalAccountUid.value)
+    failedWithHistoricalAccountUid.value = false
 })
 </script>
 
 <template>
   <n-space vertical :size="16">
-    <n-alert type="info">
-      本页用于绑定/校验 broker 交易账户并查看资金收益；paper 运行参数请在「个人配置」页面设置。
-    </n-alert>
+    <n-card title="交易账户中心">
+      <template #header-extra>
+        <n-tag :type="simulationStatus?.isBound && simulationStatus?.isVerified ? 'success' : 'warning'">
+          {{ accountStatusText }}
+        </n-tag>
+      </template>
 
-    <n-card title="交易账户中心" size="small">
-      <n-space justify="space-between" align="center" :wrap="true">
-        <n-space align="center" :wrap="true">
-          <n-select
-            v-model:value="selectedAccountId"
-            clearable
-            :options="activeAccountOptions"
-            placeholder="选择活跃账户"
-            style="width: 320px"
-          />
+      <n-space vertical :size="12">
+        <n-text depth="3">
+          管理 Backtrader 本地模拟账户的初始化参数、资金概览与交易明细。
+        </n-text>
+
+        <n-space :wrap="true" align="center">
+          <n-button :loading="brokerAccountStore.loading" @click="loadStatusAndData()">
+            刷新状态
+          </n-button>
+          <n-button :loading="tradingAccountStore.loadingOverview || tradingAccountStore.loadingDetails" @click="refreshTradingData(forcingRefresh)">
+            刷新交易数据
+          </n-button>
           <n-switch v-model:value="forcingRefresh">
             <template #checked>
               强制上游刷新
@@ -389,100 +227,172 @@ onMounted(async () => {
               缓存优先
             </template>
           </n-switch>
-          <n-button :loading="tradingAccountStore.loadingOverview || tradingAccountStore.loadingDetails" @click="loadTradingData(forcingRefresh)">
-            刷新交易数据
-          </n-button>
         </n-space>
-        <n-text depth="3">
-          最近同步：{{ tradingAccountStore.lastLoadedAt ? formatDateTime(tradingAccountStore.lastLoadedAt) : '--' }}
-        </n-text>
+
+        <n-descriptions :column="2" bordered>
+          <n-descriptions-item label="最近校验">
+            {{ simulationStatus?.lastVerifiedAt ? formatDateTime(simulationStatus?.lastVerifiedAt) : '--' }}
+          </n-descriptions-item>
+          <n-descriptions-item label="最近同步">
+            {{ tradingAccountStore.lastLoadedAt ? formatDateTime(tradingAccountStore.lastLoadedAt) : '--' }}
+          </n-descriptions-item>
+        </n-descriptions>
       </n-space>
     </n-card>
 
     <n-grid :cols="24" :x-gap="16" :y-gap="16" responsive="screen">
-      <n-grid-item :span="24" :l-span="12">
-        <n-card title="券商账户管理" size="small">
-          <n-space class="mb-3" :wrap="true">
-            <n-button type="primary" @click="openCreate">
-              新增账户
-            </n-button>
-            <n-button :disabled="!currentSelectedRow" @click="openEdit">
-              编辑账户
-            </n-button>
-            <n-button :disabled="!currentSelectedRow" @click="verifyCurrent">
-              校验账户
-            </n-button>
-            <n-button :disabled="!currentSelectedRow" type="error" @click="removeCurrent">
-              删除账户
-            </n-button>
-            <n-button :loading="brokerAccountStore.loading" @click="loadAccounts">
-              刷新列表
-            </n-button>
-          </n-space>
-          <n-data-table
-            size="small"
-            :loading="brokerAccountStore.loading"
-            :columns="accountColumns"
-            :data="brokerAccountStore.items"
-            :row-key="(row: BrokerAccountItem) => row.id"
-            :row-props="(row: BrokerAccountItem) => ({ style: 'cursor:pointer', onClick: () => onAccountRowClick(row) })"
-          />
+      <n-grid-item :span="24" :l-span="13">
+        <n-card title="初始化/更新模拟账户参数">
+          <n-form label-placement="top">
+            <n-grid :cols="24" :x-gap="12" :y-gap="4" responsive="screen">
+              <n-grid-item :span="24" :l-span="12">
+                <n-form-item label="账户标识（可选）">
+                  <n-input v-model:value="bindForm.accountUid" placeholder="留空则自动生成，例如 bt-user-1" />
+                </n-form-item>
+                <n-space vertical :size="4">
+                  <n-text depth="3" class="text-12px">
+                    默认值来自你上次初始化记录，可直接修改。
+                  </n-text>
+                  <n-button v-if="bindForm.accountUid" text size="small" @click="clearAccountUidInput">
+                    {{ hasHistoricalAccountUid ? '清空历史标识' : '清空输入' }}
+                  </n-button>
+                </n-space>
+              </n-grid-item>
+
+              <n-grid-item :span="24" :l-span="12">
+                <n-form-item label="显示名（可选）">
+                  <n-input v-model:value="bindForm.accountDisplayName" placeholder="例如：我的本地模拟盘" />
+                </n-form-item>
+              </n-grid-item>
+
+              <n-grid-item :span="24" :l-span="8">
+                <n-form-item label="初始资金">
+                  <n-input-number
+                    v-model:value="bindForm.initialCapital"
+                    :min="1"
+                    :step="1000"
+                    class="w-full"
+                    placeholder="例如：100000"
+                  />
+                </n-form-item>
+              </n-grid-item>
+
+              <n-grid-item :span="24" :l-span="8">
+                <n-form-item label="手续费率">
+                  <n-input-number
+                    v-model:value="bindForm.commissionRate"
+                    :min="0"
+                    :step="0.0001"
+                    :precision="6"
+                    class="w-full"
+                    placeholder="例如：0.0003"
+                  />
+                </n-form-item>
+              </n-grid-item>
+
+              <n-grid-item :span="24" :l-span="8">
+                <n-form-item label="滑点（bps）">
+                  <n-input-number
+                    v-model:value="bindForm.slippageBps"
+                    :min="0"
+                    :step="0.5"
+                    :precision="2"
+                    class="w-full"
+                    placeholder="例如：2"
+                  />
+                </n-form-item>
+              </n-grid-item>
+            </n-grid>
+
+            <n-space>
+              <n-tag type="default">
+                提供方：Backtrader Local Sim
+              </n-tag>
+            </n-space>
+            <n-alert v-if="bindInlineError" type="error">
+              {{ bindInlineError }}
+            </n-alert>
+            <n-alert v-if="failedWithHistoricalAccountUid" type="warning" :show-icon="false">
+              请确认当前填写的账户标识不是旧的历史 ID。
+            </n-alert>
+            <n-space justify="end">
+              <n-button type="primary" :loading="binding || brokerAccountStore.submitting" @click="bindSimulationAccountNow">
+                初始化并校验
+              </n-button>
+            </n-space>
+          </n-form>
         </n-card>
       </n-grid-item>
 
-      <n-grid-item :span="24" :l-span="12">
-        <n-card title="资金与收益概览" size="small">
+      <n-grid-item :span="24" :l-span="11">
+        <n-card title="资金与收益概览">
           <n-spin :show="tradingAccountStore.loadingOverview">
-            <n-empty v-if="!currentTradingAccount" description="未配置可用的活跃账户，请先新增并校验账户" />
+            <n-empty
+              v-if="!simulationStatus?.isBound"
+              description="未初始化模拟盘账户，请先完成初始化"
+            />
+            <n-empty
+              v-else-if="!simulationStatus?.isVerified"
+              description="模拟盘账户尚未校验，请先执行初始化并校验"
+            />
             <template v-else>
-              <n-space vertical :size="10">
-                <n-space align="center" :wrap="true">
-                  <n-tag type="info">
-                    账户：{{ currentTradingAccount.accountDisplayName || currentTradingAccount.accountUid }}
-                  </n-tag>
-                  <n-tag :type="currentTradingAccount.isVerified ? 'success' : 'warning'">
-                    {{ currentTradingAccount.isVerified ? '已校验' : '未校验' }}
-                  </n-tag>
-                  <n-tag v-if="overviewMeta?.dataSource" type="default">
-                    来源：{{ overviewMeta?.dataSource }}
-                  </n-tag>
-                </n-space>
-                <n-descriptions bordered :column="2" size="small">
-                  <n-descriptions-item label="总资产">
-                    {{ formatAmount(overviewMetrics.totalAsset) }}
-                  </n-descriptions-item>
-                  <n-descriptions-item label="可用现金">
-                    {{ formatAmount(overviewMetrics.cash) }}
-                  </n-descriptions-item>
-                  <n-descriptions-item label="持仓市值">
-                    {{ formatAmount(overviewMetrics.marketValue) }}
-                  </n-descriptions-item>
-                  <n-descriptions-item label="当日盈亏">
-                    {{ formatAmount(overviewMetrics.pnlDaily) }}
-                  </n-descriptions-item>
-                  <n-descriptions-item label="累计盈亏">
-                    {{ formatAmount(overviewMetrics.pnlTotal) }}
-                  </n-descriptions-item>
-                  <n-descriptions-item label="收益率">
-                    {{ formatPct(overviewMetrics.returnPct, 2) }}
-                  </n-descriptions-item>
-                  <n-descriptions-item label="快照时间" :span="2">
-                    {{ overviewMeta?.snapshotAt ? formatDateTime(overviewMeta?.snapshotAt) : '--' }}
-                  </n-descriptions-item>
-                </n-descriptions>
-                <n-alert v-if="tradingAccountStore.overviewError" type="error">
-                  {{ tradingAccountStore.overviewError }}
-                </n-alert>
+              <n-grid :cols="24" :x-gap="12" :y-gap="12" responsive="screen">
+                <n-grid-item :span="24" :m-span="12">
+                  <n-card embedded>
+                    <n-statistic label="总资产" :value="overviewMetrics.totalAsset || 0" :precision="2" />
+                  </n-card>
+                </n-grid-item>
+                <n-grid-item :span="24" :m-span="12">
+                  <n-card embedded>
+                    <n-statistic label="可用现金" :value="overviewMetrics.cash || 0" :precision="2" />
+                  </n-card>
+                </n-grid-item>
+                <n-grid-item :span="24" :m-span="12">
+                  <n-card embedded>
+                    <n-statistic label="当日盈亏" :value="overviewMetrics.pnlDaily || 0" :precision="2" />
+                  </n-card>
+                </n-grid-item>
+                <n-grid-item :span="24" :m-span="12">
+                  <n-card embedded>
+                    <n-statistic :value="overviewMetrics.returnPct || 0" :precision="2" label="收益率">
+                      <template #suffix>
+                        %
+                      </template>
+                    </n-statistic>
+                  </n-card>
+                </n-grid-item>
+              </n-grid>
+
+              <n-space align="center" :wrap="true">
+                <n-tag v-if="overviewMeta?.dataSource" type="default">
+                  来源：{{ overviewMeta?.dataSource }}
+                </n-tag>
+                <n-tag v-if="overviewMeta?.providerName || overviewMeta?.providerCode" type="default">
+                  提供方：{{ overviewMeta?.providerName || overviewMeta?.providerCode }}
+                </n-tag>
+                <n-tag v-if="overviewMeta?.orderChannel" type="default">
+                  通道：{{ overviewMeta?.orderChannel }}
+                </n-tag>
+                <n-text depth="3">
+                  快照：{{ overviewMeta?.snapshotAt ? formatDateTime(overviewMeta?.snapshotAt) : '--' }}
+                </n-text>
               </n-space>
+
+              <n-alert v-if="tradingAccountStore.overviewError" type="error">
+                {{ tradingAccountStore.overviewError }}
+              </n-alert>
             </template>
           </n-spin>
         </n-card>
       </n-grid-item>
     </n-grid>
 
-    <n-card title="交易明细" size="small">
+    <n-card title="交易明细">
       <n-spin :show="tradingAccountStore.loadingDetails">
-        <n-empty v-if="!currentTradingAccount" description="请选择可用账户查看持仓、委托和成交明细" />
+        <n-empty
+          v-if="!canLoadTradingData"
+          description="初始化并校验模拟盘账户后可查看持仓、委托和成交明细"
+        />
         <template v-else>
           <n-tabs type="line" animated>
             <n-tab-pane name="positions" tab="持仓">
@@ -516,92 +426,25 @@ onMounted(async () => {
               />
             </n-tab-pane>
           </n-tabs>
-          <n-alert v-if="tradingAccountStore.detailsError" class="mt-3" type="error">
+          <n-alert v-if="tradingAccountStore.detailsError" type="error">
             {{ tradingAccountStore.detailsError }}
           </n-alert>
         </template>
       </n-spin>
     </n-card>
 
-    <n-modal v-model:show="createVisible" preset="card" title="新增券商账户" class="w-720px max-w-94vw">
-      <n-space vertical>
-        <n-form label-placement="top">
-          <n-grid :cols="24" :x-gap="12">
-            <n-grid-item :span="24" :l-span="8">
-              <n-form-item label="券商代码">
-                <n-input v-model:value="createForm.brokerCode" placeholder="例如：futu" />
-              </n-form-item>
-            </n-grid-item>
-            <n-grid-item :span="24" :l-span="8">
-              <n-form-item label="环境">
-                <n-input v-model:value="createForm.environment" disabled />
-              </n-form-item>
-            </n-grid-item>
-            <n-grid-item :span="24" :l-span="8">
-              <n-form-item label="账户UID">
-                <n-input v-model:value="createForm.accountUid" placeholder="券商账户 UID" />
-              </n-form-item>
-            </n-grid-item>
-          </n-grid>
-          <n-form-item label="显示名（可选）">
-            <n-input v-model:value="createForm.accountDisplayName" placeholder="例如：我的富途模拟盘" />
-          </n-form-item>
-          <n-form-item label="凭据 JSON">
-            <n-input
-              v-model:value="createForm.credentialsText"
-              type="textarea"
-              :autosize="{ minRows: 8, maxRows: 14 }"
-              placeholder="{&quot;api_key&quot;:&quot;xxx&quot;,&quot;api_secret&quot;:&quot;yyy&quot;}"
-            />
-          </n-form-item>
-        </n-form>
-        <n-space justify="end">
-          <n-button @click="createVisible = false">
-            取消
-          </n-button>
-          <n-button type="primary" :loading="submitting" @click="submitCreate">
-            创建
-          </n-button>
-        </n-space>
-      </n-space>
-    </n-modal>
-
-    <n-modal v-model:show="editVisible" preset="card" title="编辑券商账户" class="w-720px max-w-94vw">
-      <n-space vertical>
-        <n-form label-placement="top">
-          <n-form-item label="显示名">
-            <n-input v-model:value="editForm.accountDisplayName" placeholder="可为空" />
-          </n-form-item>
-          <n-form-item label="状态">
-            <n-select
-              v-model:value="editForm.status"
-              :options="[
-                { label: 'active', value: 'active' },
-                { label: 'disabled', value: 'disabled' },
-              ]"
-            />
-          </n-form-item>
-          <n-form-item label="更新凭据">
-            <n-switch v-model:value="editForm.updateCredentials" />
-          </n-form-item>
-          <n-form-item v-if="editForm.updateCredentials" label="新凭据 JSON">
-            <n-input
-              v-model:value="editForm.credentialsText"
-              type="textarea"
-              :autosize="{ minRows: 8, maxRows: 14 }"
-              placeholder="{&quot;api_key&quot;:&quot;xxx&quot;,&quot;api_secret&quot;:&quot;yyy&quot;}"
-            />
-          </n-form-item>
-        </n-form>
-        <n-space justify="end">
-          <n-button @click="editVisible = false">
-            取消
-          </n-button>
-          <n-button type="primary" :loading="submitting" @click="submitEdit">
-            保存
-          </n-button>
-        </n-space>
-      </n-space>
-    </n-modal>
+    <n-card v-if="simulationStatus?.isVerified">
+      <n-descriptions :column="3" bordered>
+        <n-descriptions-item label="总资产(格式化)">
+          {{ formatAmount(overviewMetrics.totalAsset) }}
+        </n-descriptions-item>
+        <n-descriptions-item label="可用现金(格式化)">
+          {{ formatAmount(overviewMetrics.cash) }}
+        </n-descriptions-item>
+        <n-descriptions-item label="收益率(格式化)">
+          {{ formatPct(overviewMetrics.returnPct, 2) }}
+        </n-descriptions-item>
+      </n-descriptions>
+    </n-card>
   </n-space>
 </template>

@@ -1,5 +1,6 @@
 import type { MenuOption } from 'naive-ui'
 import type { RouteRecordRaw } from 'vue-router'
+import { HOME_PATH } from '@/constants/home-path'
 import { usePermission } from '@/hooks'
 import Layout from '@/layouts/index.vue'
 import { $t, arrayToTree, renderIcon } from '@/utils'
@@ -41,7 +42,7 @@ export function createRoutes(routes: AppRoute.RowRoute[]) {
   const appRootRoute: RouteRecordRaw = {
     path: '/appRoot',
     name: 'appRoot',
-    redirect: import.meta.env.VITE_HOME_PATH,
+    redirect: HOME_PATH,
     component: Layout,
     meta: {
       title: '',

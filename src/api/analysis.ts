@@ -30,11 +30,6 @@ export async function analyzeAsync(payload: AnalysisRequest): Promise<{ taskId: 
     force_refresh: payload.forceRefresh ?? false,
     async_mode: true,
     execution_mode: executionMode,
-    ...(payload.brokerAccountId != null && executionMode !== 'paper'
-      ? {
-          broker_account_id: payload.brokerAccountId,
-        }
-      : {}),
   }
 
   const response = await client.post('/api/v1/analysis/analyze', body, {

@@ -17,12 +17,14 @@ function handleReload() {
 <template>
   <n-tooltip placement="bottom" trigger="hover">
     <template #trigger>
-      <CommonWrapper @click="handleReload">
-        <icon-park-outline-refresh :class="{ 'animate-spin': loading }" />
-      </CommonWrapper>
+      <n-button text :aria-label="$t('common.reload')" @click="handleReload">
+        <template #icon>
+          <n-icon>
+            <icon-park-outline-refresh :class="{ 'animate-spin': loading }" />
+          </n-icon>
+        </template>
+      </n-button>
     </template>
     <span>{{ $t('common.reload') }}</span>
   </n-tooltip>
 </template>
-
-<style scoped></style>

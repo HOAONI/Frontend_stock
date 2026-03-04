@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { useAppStore, useRouteStore } from '@/store'
+import type { MenuOption } from 'naive-ui'
+import SimulationBindModal from '@/components/trading/SimulationBindModal.vue'
+import { useAppStore, useBrokerAccountStore, useRouteStore, useSessionStore, useTradingAccountStore } from '@/store'
 import {
   BackTop,
   Breadcrumb,
@@ -10,118 +12,176 @@ import {
   UserCenter,
 } from './components'
 import Content from './Content.vue'
-import { ProLayout, useLayoutMenu } from 'pro-naive-ui'
 
 const route = useRoute()
+const router = useRouter()
 const appStore = useAppStore()
 const routeStore = useRouteStore()
-
-const { layoutMode } = storeToRefs(useAppStore())
-
-const {
-  layout,
-  activeKey,
-} = useLayoutMenu({
-  mode: layoutMode,
-  accordion: true,
-  menus: routeStore.menus as any,
-}) as any
-
-watch(() => route.path, () => {
-  activeKey.value = routeStore.activeMenu
-}, { immediate: true })
+const sessionStore = useSessionStore()
+const brokerAccountStore = useBrokerAccountStore()
+const tradingAccountStore = useTradingAccountStore()
 
 const showMobileDrawer = ref(false)
+const onboardingChecking = ref(false)
+const lastOnboardingStatusErrorAt = ref(0)
 
-const sidebarWidth = ref(240)
-const sidebarCollapsedWidth = ref(64)
+const sidebarWidth = 240
+const sidebarCollapsedWidth = 64
 
-const hasHorizontalMenu = computed(() => ['horizontal', 'mixed-two-column', 'mixed-sidebar'].includes(layoutMode.value))
-const hideCollapseButton = computed(() => ['horizontal'].includes(layoutMode.value) || appStore.isMobile)
+const menuOptions = computed(() => routeStore.menus as MenuOption[])
+
+const menuValue = computed(() => {
+  return routeStore.activeMenu || route.path
+})
+
+const bindModalVisible = computed({
+  get: () => brokerAccountStore.bindModalVisible,
+  set: (value: boolean) => {
+    if (value) {
+      brokerAccountStore.openBindModal()
+    }
+    else {
+      brokerAccountStore.closeBindModal()
+    }
+  },
+})
+
+function handleMenuSelect(key: string) {
+  if (route.path !== key)
+    router.push(key)
+  showMobileDrawer.value = false
+}
+
+async function refreshSimulationOnboarding(force = false) {
+  if (route.path === '/login' || !sessionStore.loggedIn) {
+    brokerAccountStore.closeBindModal()
+    return
+  }
+
+  if (onboardingChecking.value)
+    return
+
+  onboardingChecking.value = true
+  try {
+    await brokerAccountStore.ensureSimulationStatus(force)
+  }
+  catch {
+    const now = Date.now()
+    if (now - lastOnboardingStatusErrorAt.value > 15000) {
+      window.$message.warning('账户状态获取失败，请检查后端或 Agent 服务')
+      lastOnboardingStatusErrorAt.value = now
+    }
+    brokerAccountStore.openBindModal()
+    return
+  }
+  finally {
+    onboardingChecking.value = false
+  }
+
+  const status = brokerAccountStore.simulationStatus
+  if (status?.isBound && status?.isVerified) {
+    brokerAccountStore.clearOnboardingDismissedAt()
+    brokerAccountStore.closeBindModal()
+    return
+  }
+
+  if (brokerAccountStore.shouldShowSimulationOnboarding()) {
+    brokerAccountStore.openBindModal()
+  }
+}
+
+function handleBindModalDismissed() {
+  brokerAccountStore.dismissOnboardingForHours()
+}
+
+async function handleBindModalBound() {
+  brokerAccountStore.clearOnboardingDismissedAt()
+  await Promise.allSettled([
+    tradingAccountStore.loadOverview({ refresh: true }),
+    tradingAccountStore.loadDetails({ refresh: true }),
+  ])
+}
+
+watch(
+  () => [route.fullPath, sessionStore.loggedIn, sessionStore.currentUser?.username],
+  () => {
+    void refreshSimulationOnboarding(false)
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
-  <ProLayout
-    v-model:collapsed="appStore.collapsed"
-    :mode="layoutMode"
-    :is-mobile="appStore.isMobile"
-    :show-logo="appStore.showLogo && !appStore.isMobile"
-    :show-footer="appStore.showFooter"
-    :show-tabbar="appStore.showTabs"
-    nav-fixed
-    show-nav
-    show-sidebar
-    :nav-height="60"
-    :tabbar-height="45"
-    :footer-height="40"
-    :sidebar-width="sidebarWidth"
-    :sidebar-collapsed-width="sidebarCollapsedWidth"
-  >
-    <template #logo>
-      <Logo />
-    </template>
+  <n-layout has-sider style="height: 100%;">
+    <n-layout-sider
+      v-if="!appStore.isMobile && appStore.layoutMode === 'vertical'"
+      :collapsed="appStore.collapsed"
+      :collapsed-width="sidebarCollapsedWidth"
+      :width="sidebarWidth"
+      bordered
+      collapse-mode="width"
+      show-trigger="bar"
+      @update:collapsed="(value) => appStore.collapsed = value"
+    >
+      <Logo v-if="appStore.showLogo" />
+      <n-menu
+        :value="menuValue"
+        :collapsed="appStore.collapsed"
+        :collapsed-width="sidebarCollapsedWidth"
+        :options="menuOptions"
+        @update:value="handleMenuSelect"
+      />
+    </n-layout-sider>
 
-    <template #nav-left>
-      <template v-if="appStore.isMobile">
-        <Logo />
-      </template>
-
-      <template v-else>
-        <div v-if="!hasHorizontalMenu || !hideCollapseButton" class="h-full flex-y-center gap-1 p-x-sm">
-          <CollapaseButton v-if="!hideCollapseButton" />
-          <Breadcrumb v-if="!hasHorizontalMenu" />
-        </div>
-      </template>
-    </template>
-
-    <template #nav-center>
-      <div class="h-full flex-y-center gap-1">
-        <n-menu v-if="hasHorizontalMenu" v-bind="layout.horizontalMenuProps" />
-      </div>
-    </template>
-
-    <template #nav-right>
-      <div class="h-full flex-y-center gap-1 p-x-xl">
-        <template v-if="appStore.isMobile">
-          <n-button quaternary @click="showMobileDrawer = true">
-            <template #icon>
-              <n-icon size="18">
-                <icon-park-outline-hamburger-button />
-              </n-icon>
+    <n-layout>
+      <n-layout-header v-if="appStore.layoutMode === 'vertical'" bordered>
+        <n-space justify="space-between" align="center" style="width: 100%; height: 60px; padding: 0 16px;">
+          <n-space align="center">
+            <n-button v-if="appStore.isMobile" quaternary @click="showMobileDrawer = true">
+              <template #icon>
+                <n-icon>
+                  <icon-park-outline-hamburger-button />
+                </n-icon>
+              </template>
+            </n-button>
+            <template v-else>
+              <CollapaseButton />
+              <Breadcrumb v-if="appStore.showBreadcrumb" />
             </template>
-          </n-button>
-        </template>
-        <template v-else>
+          </n-space>
+
           <UserCenter />
-        </template>
-      </div>
-    </template>
+        </n-space>
+      </n-layout-header>
 
-    <template #sidebar>
-      <n-menu v-bind="layout.verticalMenuProps" :collapsed-width="sidebarCollapsedWidth" />
-    </template>
+      <n-layout-content>
+        <n-card v-if="appStore.showTabs && appStore.layoutMode === 'vertical'" :bordered="false" size="small">
+          <TabBar />
+        </n-card>
+        <Content />
+      </n-layout-content>
 
-    <template #sidebar-extra>
-      <n-scrollbar class="flex-[1_0_0]">
-        <n-menu v-bind="layout.verticalExtraMenuProps" :collapsed-width="sidebarCollapsedWidth" />
-      </n-scrollbar>
-    </template>
+      <n-layout-footer v-if="appStore.showFooter && appStore.layoutMode === 'vertical'" bordered>
+        <n-space justify="center" style="padding: 10px 0;">
+          {{ appStore.footerText }}
+        </n-space>
+      </n-layout-footer>
+    </n-layout>
 
-    <template #tabbar>
-      <TabBar />
-    </template>
-
-    <template #footer>
-      <div class="flex-center h-full">
-        {{ appStore.footerText }}
-      </div>
-    </template>
-
-    <Content />
     <BackTop />
 
     <MobileDrawer v-model:show="showMobileDrawer">
-      <n-menu v-bind="layout.verticalMenuProps" />
+      <n-menu
+        :value="menuValue"
+        :options="menuOptions"
+        @update:value="handleMenuSelect"
+      />
     </MobileDrawer>
-  </ProLayout>
+
+    <SimulationBindModal
+      v-model:show="bindModalVisible"
+      @dismissed="handleBindModalDismissed"
+      @bound="handleBindModalBound"
+    />
+  </n-layout>
 </template>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import DataSourceBadge from '@/components/common/DataSourceBadge.vue'
 import { useEcharts } from '@/hooks/useEcharts'
 import type { ECOption } from '@/hooks/useEcharts'
+import { CHART_HEIGHT, GRID_GAP, SPACING } from '@/constants/design-tokens'
 import type { FactorSnapshot, IntradayPoint } from '@/types/market-analytics'
 import { fetchMarketBundle, fetchQuoteOnly } from '@/services/market-service'
 import { formatDateTime, formatPct, validateStockCode } from '@/utils/stock'
@@ -10,6 +10,7 @@ const stockCode = ref('600519')
 const days = ref(120)
 const loading = ref(false)
 const autoRefresh = ref(true)
+const isMobile = useMediaQuery('(max-width: 1024px)')
 
 const quote = ref<Awaited<ReturnType<typeof fetchQuoteOnly>>['data']['quote']>(null)
 const bars = ref<Array<{ date: string, open: number, close: number, low: number, high: number }>>([])
@@ -78,6 +79,36 @@ const factorCards = computed(() => {
     { label: 'VolRatio5', value: toFactorText(factors.value.volRatio5, '', 2) },
     { label: 'Amplitude', value: toFactorText(factors.value.amplitude, '%', 2) },
   ]
+})
+
+const sourceType = computed<'success' | 'warning' | 'error'>(() => {
+  if (sourceTag.value === 'api')
+    return 'success'
+  if (sourceTag.value === 'derived')
+    return 'warning'
+  return 'error'
+})
+
+const sourceText = computed(() => {
+  if (sourceTag.value === 'api')
+    return '真实接口数据'
+  if (sourceTag.value === 'derived')
+    return '派生数据'
+  return '模拟数据'
+})
+
+const primaryChartStyle = computed(() => {
+  return {
+    width: '100%',
+    height: `${isMobile.value ? CHART_HEIGHT.primaryMobile : CHART_HEIGHT.primaryDesktop}px`,
+  }
+})
+
+const secondaryChartStyle = computed(() => {
+  return {
+    width: '100%',
+    height: `${isMobile.value ? CHART_HEIGHT.secondaryMobile : CHART_HEIGHT.secondaryDesktop}px`,
+  }
 })
 
 function buildMaSeries(window: number) {
@@ -266,16 +297,41 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <n-space vertical :size="16">
-    <n-card title="行情与策略展示" size="small">
-      <n-space justify="space-between" align="center" :wrap="true">
-        <n-space align="center" :wrap="true">
-          <n-input v-model:value="stockCode" clearable placeholder="股票代码" style="width: 180px" />
-          <n-input-number v-model:value="days" :min="10" :max="365" :step="10" style="width: 140px">
+  <n-space vertical :size="SPACING.lg">
+    <n-card title="行情控制台" size="small">
+      <template #header-extra>
+        <n-space :size="SPACING.sm" :wrap="true" align="center">
+          <n-tag :type="autoRefresh ? 'success' : 'warning'">
+            {{ autoRefresh ? '自动刷新中（5s）' : '已暂停自动刷新' }}
+          </n-tag>
+          <n-popover trigger="hover">
+            <template #trigger>
+              <n-tag :type="sourceType">
+                {{ sourceText }}
+              </n-tag>
+            </template>
+            <n-space vertical :size="SPACING.sm">
+              <n-text>当前来源：{{ sourceText }}</n-text>
+              <n-text v-if="missingApis.length > 0" depth="3">
+                缺失接口：{{ missingApis.join(', ') }}
+              </n-text>
+            </n-space>
+          </n-popover>
+        </n-space>
+      </template>
+
+      <n-grid :cols="24" :x-gap="GRID_GAP.inner" :y-gap="GRID_GAP.inner" responsive="screen">
+        <n-grid-item :span="24" :m-span="8" :l-span="5">
+          <n-input v-model:value="stockCode" clearable placeholder="股票代码" />
+        </n-grid-item>
+        <n-grid-item :span="24" :m-span="8" :l-span="4">
+          <n-input-number v-model:value="days" :min="10" :max="365" :step="10">
             <template #prefix>
               天数
             </template>
           </n-input-number>
+        </n-grid-item>
+        <n-grid-item :span="24" :m-span="8" :l-span="5">
           <n-switch v-model:value="autoRefresh">
             <template #checked>
               自动刷新
@@ -284,24 +340,38 @@ onUnmounted(() => {
               已暂停
             </template>
           </n-switch>
+        </n-grid-item>
+        <n-grid-item :span="24" :m-span="12" :l-span="5">
           <n-button type="primary" :loading="loading" @click="loadMarket">
             加载行情
           </n-button>
-          <n-button @click="clearIntraday">
+        </n-grid-item>
+        <n-grid-item :span="24" :m-span="12" :l-span="5">
+          <n-button tertiary @click="clearIntraday">
             清空分时
           </n-button>
-        </n-space>
-        <DataSourceBadge :source="sourceTag" :missing-apis="missingApis" />
-      </n-space>
-      <n-alert v-for="item in warnings" :key="item" class="mt-3" type="warning">
-        {{ item }}
-      </n-alert>
+        </n-grid-item>
+      </n-grid>
     </n-card>
 
-    <n-grid :cols="24" :x-gap="16" :y-gap="16" responsive="screen">
+    <n-card v-if="warnings.length > 0" title="数据提醒" size="small">
+      <n-space vertical :size="SPACING.sm">
+        <n-alert v-for="item in warnings" :key="item" type="warning" :show-icon="false">
+          {{ item }}
+        </n-alert>
+      </n-space>
+    </n-card>
+
+    <n-grid :cols="24" :x-gap="GRID_GAP.outer" :y-gap="GRID_GAP.outer" responsive="screen">
+      <n-grid-item :span="24" :l-span="16">
+        <n-card title="日线 K 线图" size="small">
+          <div ref="klineRef" :style="primaryChartStyle" />
+        </n-card>
+      </n-grid-item>
+
       <n-grid-item :span="24" :l-span="8">
-        <n-space vertical :size="16">
-          <n-card title="实时行情" size="small">
+        <n-card title="实时行情与因子" size="small">
+          <n-space vertical :size="SPACING.md">
             <n-empty v-if="!quote" description="暂无数据" />
             <n-descriptions v-else bordered :column="1" size="small" label-placement="left">
               <n-descriptions-item label="股票">
@@ -311,9 +381,9 @@ onUnmounted(() => {
                 {{ quote.currentPrice }}
               </n-descriptions-item>
               <n-descriptions-item label="涨跌幅">
-                <n-text :type="(quote.changePercent || 0) >= 0 ? 'error' : 'success'">
+                <n-tag :type="(quote.changePercent || 0) >= 0 ? 'error' : 'success'">
                   {{ formatPct(quote.changePercent) }}
-                </n-text>
+                </n-tag>
               </n-descriptions-item>
               <n-descriptions-item label="开盘 / 最高 / 最低">
                 {{ quote.open ?? '--' }} / {{ quote.high ?? '--' }} / {{ quote.low ?? '--' }}
@@ -325,13 +395,11 @@ onUnmounted(() => {
                 {{ formatDateTime(quote.updateTime) }}
               </n-descriptions-item>
             </n-descriptions>
-          </n-card>
 
-          <n-card title="量化指标" size="small">
-            <n-grid :cols="2" :x-gap="8" :y-gap="8">
-              <n-grid-item v-for="factor in factorCards" :key="factor.label">
-                <n-card size="small" embedded>
-                  <n-space justify="space-between" align="center">
+            <n-grid :cols="24" :x-gap="GRID_GAP.inner" :y-gap="GRID_GAP.inner" responsive="screen">
+              <n-grid-item v-for="factor in factorCards" :key="factor.label" :span="12">
+                <n-card embedded size="small">
+                  <n-space vertical :size="SPACING.xs">
                     <n-text depth="3">
                       {{ factor.label }}
                     </n-text>
@@ -342,21 +410,13 @@ onUnmounted(() => {
                 </n-card>
               </n-grid-item>
             </n-grid>
-          </n-card>
-        </n-space>
-      </n-grid-item>
-
-      <n-grid-item :span="24" :l-span="16">
-        <n-card size="small" title="日线 K 线图">
-          <div ref="klineRef" class="h-360px w-full" />
-        </n-card>
-      </n-grid-item>
-
-      <n-grid-item :span="24">
-        <n-card size="small" title="分时轮询曲线">
-          <div ref="intradayRef" class="h-260px w-full" />
+          </n-space>
         </n-card>
       </n-grid-item>
     </n-grid>
+
+    <n-card title="分时轮询曲线" size="small">
+      <div ref="intradayRef" :style="secondaryChartStyle" />
+    </n-card>
   </n-space>
 </template>

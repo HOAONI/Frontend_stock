@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { HOME_PATH } from '@/constants/home-path'
 import { useSessionStore } from '@/store'
 
 const router = useRouter()
@@ -31,7 +32,7 @@ const registerError = ref('')
 function resolveRedirect(): string {
   const redirect = String(route.query.redirect ?? '')
   if (!redirect.startsWith('/') || redirect.startsWith('//')) {
-    return import.meta.env.VITE_HOME_PATH
+    return HOME_PATH
   }
   return redirect
 }
@@ -111,14 +112,14 @@ async function submitRegister() {
   }
 
   window.$message.success('注册成功，正在进入系统')
-  router.replace(import.meta.env.VITE_HOME_PATH)
+  router.replace(HOME_PATH)
 }
 
 onMounted(async () => {
   try {
     await sessionStore.ensureStatus()
     if (!sessionStore.authEnabled || sessionStore.loggedIn) {
-      router.replace(import.meta.env.VITE_HOME_PATH)
+      router.replace(HOME_PATH)
     }
   }
   catch {

@@ -38,7 +38,7 @@ export default defineConfig(({ mode }) => {
       reportCompressedSize: false, // 启用/禁用 gzip 压缩大小报告
     },
     optimizeDeps: {
-      include: ['echarts', 'md-editor-v3', 'quill'],
+      include: ['echarts'],
     },
     css: {
       preprocessorOptions: {

@@ -1,11 +1,13 @@
 export interface TradingQueryParams {
-  brokerAccountId?: number
   refresh?: boolean
 }
 
 export interface TradingAccountMeta {
   brokerAccountId: number
   brokerCode: string
+  providerCode?: string | null
+  providerName?: string | null
+  orderChannel?: string
   environment: string
   accountUid: string
   accountDisplayName: string | null

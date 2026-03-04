@@ -1,4 +1,5 @@
 import type { Router } from 'vue-router'
+import { HOME_PATH } from '@/constants/home-path'
 import { useAppStore, useRouteStore, useSessionStore, useTabStore } from '@/store'
 
 const title = import.meta.env.VITE_APP_NAME
@@ -44,19 +45,19 @@ export function setupRouterGuard(router: Router) {
         next({ path: '/login', replace: true })
       }
       else {
-        next({ path: import.meta.env.VITE_HOME_PATH, replace: true })
+        next({ path: HOME_PATH, replace: true })
       }
       return
     }
 
     if (to.name === 'login') {
       if (!sessionStore.authEnabled) {
-        next({ path: import.meta.env.VITE_HOME_PATH, replace: true })
+        next({ path: HOME_PATH, replace: true })
         return
       }
       if (sessionStore.loggedIn) {
         const redirect = safeRedirect(String(to.query.redirect ?? ''))
-        next({ path: redirect || import.meta.env.VITE_HOME_PATH, replace: true })
+        next({ path: redirect || HOME_PATH, replace: true })
         return
       }
       next()

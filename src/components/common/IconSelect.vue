@@ -15,22 +15,18 @@ interface IconList {
   categories?: Record<string, string[]>
   uncategorized?: string[]
 }
+
 const value = defineModel('value', { type: String })
 
-// 包含的图标库系列名，更多：https://icon-sets.iconify.design/
 const nameList = ['icon-park-outline', 'carbon', 'ant-design']
 
-// 获取单个图标库数据
 async function fetchIconList(name: string): Promise<IconList> {
   return await fetch(`https://api.iconify.design/collection?prefix=${name}`).then(res => res.json())
 }
 
-// 获取所有图标库数据
-async function fetchIconAllList(nameList: string[]) {
-  // 并行请求所有图标列表
-  const targets = await Promise.all(nameList.map(fetchIconList))
+async function fetchIconAllList(list: string[]) {
+  const targets = await Promise.all(list.map(fetchIconList))
 
-  // 处理每个返回的图标数据
   const iconList = targets.map((item) => {
     const icons = [
       ...(item.categories ? Object.values(item.categories).flat() : []),
@@ -39,12 +35,10 @@ async function fetchIconAllList(nameList: string[]) {
     return { ...item, icons }
   })
 
-  // 处理本地图标
   const svgNames = Object.keys(import.meta.glob('@/assets/svg-icons/*.svg')).map(
     path => path.split('/').pop()?.replace('.svg', ''),
-  ).filter(Boolean) as string[] // 过滤掉 undefined 并断言为 string[]
+  ).filter(Boolean) as string[]
 
-  // 在数组开头添加
   iconList.unshift({
     prefix: 'local',
     title: 'Local Icons',
@@ -62,59 +56,46 @@ onMounted(async () => {
   iconList.value = await fetchIconAllList(nameList)
 })
 
-// 当前tab
 const currentTab = shallowRef(0)
-// 当前tag
 const currentTag = shallowRef('')
-
-// 搜索图标输入框值
 const searchValue = ref('')
-
-// 当前页数
 const currentPage = shallowRef(1)
 
-// 切换tab
 function handleChangeTab(index: number) {
   currentTab.value = index
   currentTag.value = ''
   currentPage.value = 1
 }
 
-// 选择分类tag
 function handleSelectIconTag(icon: string) {
   currentTag.value = currentTag.value === icon ? '' : icon
   currentPage.value = 1
 }
 
-// 包含当前分类或所有图标列表
 const icons = computed(() => {
   if (!iconList.value[currentTab.value])
     return []
   const hasTag = !!currentTag.value
   return hasTag
-    ? iconList.value[currentTab.value]?.categories?.[currentTag.value] || [] // 使用可选链
+    ? iconList.value[currentTab.value]?.categories?.[currentTag.value] || []
     : iconList.value[currentTab.value].icons || []
 })
 
-// 符合搜索条件的图标列表
 const filteredIcons = computed(() => {
   return icons.value?.filter(i => i.includes(searchValue.value)) || []
 })
 
-// 当前页显示的图标
 const visibleIcons = computed(() => {
   return filteredIcons.value.slice((currentPage.value - 1) * 200, currentPage.value * 200)
 })
 
 const showModal = ref(false)
 
-// 选择图标
 function handleSelectIcon(icon: string) {
   value.value = icon
   showModal.value = false
 }
 
-// 清除图标
 function clearIcon() {
   value.value = ''
   showModal.value = false
@@ -133,8 +114,14 @@ function clearIcon() {
       {{ $t('common.choose') }}
     </n-button>
   </n-input-group>
+
   <n-modal
-    v-model:show="showModal" preset="card" :title="$t('components.iconSelector.selectorTitle')" size="small" class="w-800px" :bordered="false"
+    v-model:show="showModal"
+    preset="card"
+    :title="$t('components.iconSelector.selectorTitle')"
+    size="small"
+    class="w-800px"
+    :bordered="false"
   >
     <template #header-extra>
       <n-button type="warning" size="small" ghost @click="clearIcon">
@@ -144,44 +131,49 @@ function clearIcon() {
 
     <n-tabs :value="currentTab" type="line" animated placement="left" @update:value="handleChangeTab">
       <n-tab-pane v-for="(list, index) in iconList" :key="list.prefix" :name="index" :tab="list.title">
-        <n-flex vertical>
-          <n-flex size="small">
+        <n-space vertical :size="12">
+          <n-space :wrap="true">
             <n-tag
-              v-for="(_v, k) in list.categories" :key="k"
-              :checked="currentTag === k" round checkable size="small"
+              v-for="(_v, k) in list.categories"
+              :key="k"
+              :checked="currentTag === k"
+              checkable
+              size="small"
               @update:checked="handleSelectIconTag(k)"
             >
               {{ k }}
             </n-tag>
-          </n-flex>
+          </n-space>
 
           <n-input
-            v-model:value="searchValue" type="text" clearable
+            v-model:value="searchValue"
+            type="text"
+            clearable
             :placeholder="$t('components.iconSelector.searchPlaceholder')"
           />
 
-          <div>
-            <n-flex :size="2">
-              <n-el
-                v-for="(icon) in visibleIcons" :key="icon"
-                class="hover:(text-[var(--primary-color)] ring-1) ring-[var(--primary-color)] p-1 rounded flex-center"
-                :title="`${list.prefix}:${icon}`"
-                @click="handleSelectIcon(`${list.prefix}:${icon}`)"
-              >
-                <nova-icon :icon="`${list.prefix}:${icon}`" :size="24" />
-              </n-el>
-              <n-empty v-if="visibleIcons.length === 0" class="w-full" />
-            </n-flex>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 8px;">
+            <n-button
+              v-for="icon in visibleIcons"
+              :key="icon"
+              quaternary
+              :title="`${list.prefix}:${icon}`"
+              @click="handleSelectIcon(`${list.prefix}:${icon}`)"
+            >
+              <nova-icon :icon="`${list.prefix}:${icon}`" :size="22" />
+            </n-button>
           </div>
 
-          <n-flex justify="center">
+          <n-empty v-if="visibleIcons.length === 0" />
+
+          <n-space justify="center">
             <n-pagination
               v-model:page="currentPage"
               :item-count="filteredIcons.length"
               :page-size="200"
             />
-          </n-flex>
-        </n-flex>
+          </n-space>
+        </n-space>
       </n-tab-pane>
     </n-tabs>
   </n-modal>

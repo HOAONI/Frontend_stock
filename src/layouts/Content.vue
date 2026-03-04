@@ -1,21 +1,22 @@
 <script setup lang="ts">
+import { SPACING } from '@/constants/design-tokens'
 import { useAppStore, useRouteStore } from '@/store'
 
 const appStore = useAppStore()
 const routeStore = useRouteStore()
+const isMobile = useMediaQuery('(max-width: 1024px)')
+
+const contentStyle = computed(() => {
+  if (appStore.layoutMode === 'full-content')
+    return {}
+  const padding = isMobile.value ? SPACING.md : SPACING.lg
+  return { padding: `${padding}px` }
+})
 </script>
 
 <template>
-  <n-el
-    class="h-full"
-    :class="[
-      appStore.layoutMode === 'full-content' ? 'p-0' : 'p-16px',
-    ]"
-    style="background-color: var(--action-color);"
-  >
-    <router-view
-      v-slot="{ Component, route }"
-    >
+  <n-el :style="contentStyle">
+    <router-view v-slot="{ Component, route }">
       <transition :name="appStore.transitionAnimation" mode="out-in">
         <keep-alive :include="routeStore.cacheRoutes">
           <component :is="Component" v-if="appStore.loadFlag" :key="route.fullPath" />

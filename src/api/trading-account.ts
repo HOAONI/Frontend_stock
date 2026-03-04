@@ -11,8 +11,6 @@ import { toCamelCase } from './case'
 
 function buildQuery(params: TradingQueryParams = {}): Record<string, unknown> {
   const query: Record<string, unknown> = {}
-  if (params.brokerAccountId != null)
-    query.broker_account_id = params.brokerAccountId
   if (params.refresh != null)
     query.refresh = params.refresh
   return query

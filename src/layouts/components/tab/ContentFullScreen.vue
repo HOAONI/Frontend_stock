@@ -11,7 +11,6 @@ function enterFullContent() {
 }
 
 function exitFullContent() {
-  // 如果是全屏或者数据不存在，则恢复为默认的vertical
   if (previousLayoutMode === 'full-content' || !previousLayoutMode) {
     previousLayoutMode = 'vertical'
   }
@@ -22,29 +21,31 @@ function exitFullContent() {
 <template>
   <n-tooltip v-if="!appStore.isMobile" placement="bottom" trigger="hover">
     <template #trigger>
-      <CommonWrapper @click="enterFullContent">
-        <icon-park-outline-full-screen-one />
-      </CommonWrapper>
+      <n-button text :aria-label="$t('app.togglContentFullScreen')" @click="enterFullContent">
+        <template #icon>
+          <n-icon>
+            <icon-park-outline-full-screen-one />
+          </n-icon>
+        </template>
+      </n-button>
     </template>
     {{ $t('app.togglContentFullScreen') }}
   </n-tooltip>
 
   <Teleport to="body">
-    <div
+    <n-button
       v-if="appStore.layoutMode === 'full-content'"
-      class="fixed top-4 right-0 z-[9999]"
+      type="primary"
+      circle
+      aria-label="退出全内容模式"
+      style="position: fixed; right: 16px; top: 16px; z-index: 9999;"
+      @click="exitFullContent"
     >
-      <n-tooltip placement="left" trigger="hover">
-        <template #trigger>
-          <n-el
-            class="bg-[var(--primary-color)] c-[var(--base-color)] rounded-l-lg shadow-lg p-2 cursor-pointer"
-            @click="exitFullContent"
-          >
-            <icon-park-outline-off-screen-one />
-          </n-el>
-        </template>
-        {{ $t('app.togglContentFullScreen') }}
-      </n-tooltip>
-    </div>
+      <template #icon>
+        <n-icon>
+          <icon-park-outline-off-screen-one />
+        </n-icon>
+      </template>
+    </n-button>
   </Teleport>
 </template>

@@ -1,4 +1,5 @@
 import type { RouteLocationNormalized } from 'vue-router'
+import { HOME_PATH } from '@/constants/home-path'
 import { router } from '@/router'
 
 interface TabState {
@@ -56,7 +57,7 @@ export const useTabStore = defineStore('tab-store', {
       })
       // 删除后如果清空了，就跳转到默认首页
       if (tabsLength - 1 === 0)
-        router.push('/')
+        router.push(HOME_PATH)
     },
 
     closeOtherTabs(fullPath: string) {
@@ -77,7 +78,7 @@ export const useTabStore = defineStore('tab-store', {
     },
     closeAllTabs() {
       this.tabs.length = 0
-      router.push('/')
+      router.push(HOME_PATH)
     },
 
     hasExistTab(fullPath: string) {

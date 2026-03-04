@@ -1,41 +1,38 @@
 <script setup lang="ts">
+import type { DropdownOption } from 'naive-ui'
 import { useTabStore } from '@/store'
-import { renderIcon } from '@/utils'
 
 const tabStore = useTabStore()
-
+const router = useRouter()
 const { t } = useI18n()
 
-function renderDropTabsLabel(option: any) {
-  return t(`route.${String(option.name)}`, option.meta.title)
-}
+const options = computed<DropdownOption[]>(() => {
+  return tabStore.allTabs.map((item) => {
+    return {
+      label: t(`route.${String(item.name)}`, item.meta.title as string),
+      key: item.fullPath,
+    }
+  })
+})
 
-function renderDropTabsIcon(option: any) {
-  return renderIcon(option.meta.icon)!()
-}
-
-const router = useRouter()
-function handleDropTabs(key: string, option: any) {
-  router.push(option.path)
+function handleDropTabs(key: string | number) {
+  router.push(String(key))
 }
 </script>
 
 <template>
   <n-dropdown
-    :options="tabStore.allTabs"
-    :render-label="renderDropTabsLabel"
-    :render-icon="renderDropTabsIcon"
+    :options="options"
     trigger="click"
     size="small"
-    key-field="fullPath"
     @select="handleDropTabs"
   >
-    <CommonWrapper>
-      <icon-park-outline-application-menu />
-    </CommonWrapper>
+    <n-button text aria-label="标签页列表">
+      <template #icon>
+        <n-icon>
+          <icon-park-outline-application-menu />
+        </n-icon>
+      </template>
+    </n-button>
   </n-dropdown>
 </template>
-
-<style scoped>
-
-</style>

@@ -1,5 +1,17 @@
 export const staticRoutes: AppRoute.RowRoute[] = [
   {
+    name: 'home',
+    path: '/home',
+    title: '首页',
+    requiresAuth: true,
+    icon: 'icon-park-outline:home',
+    menuType: 'page',
+    pinTab: true,
+    componentPath: '/home/index.vue',
+    id: 100,
+    pid: null,
+  },
+  {
     name: 'analysisCenter',
     path: '/analysis/center',
     title: 'AI 分析与调度',

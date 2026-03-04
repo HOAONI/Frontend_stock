@@ -1,40 +1,29 @@
-export type BrokerAccountStatus = 'active' | 'disabled'
-export type BrokerEnvironment = 'paper'
-
-export interface BrokerAccountItem {
-  id: number
-  brokerCode: string
-  environment: BrokerEnvironment | string
-  accountUid: string
-  accountDisplayName: string | null
-  status: BrokerAccountStatus
+export interface SimulationAccountStatusResponse {
+  isBound: boolean
   isVerified: boolean
+  requiresSetup?: boolean
+  brokerAccountId: number | null
+  accountUid: string | null
+  accountDisplayName: string | null
+  brokerCode: string | null
+  providerCode: string | null
+  providerName: string | null
+  complianceRegion: string | null
+  autoOrderEnabled: boolean
+  engine?: string | null
+  environment: string | null
   lastVerifiedAt: string | null
-  credentialsMasked: boolean
-  createdAt: string
-  updatedAt: string
 }
 
-export interface BrokerAccountListResponse {
-  total: number
-  items: BrokerAccountItem[]
-}
-
-export interface CreateBrokerAccountRequest {
-  brokerCode: string
-  environment?: BrokerEnvironment
-  accountUid: string
+export interface BindSimulationAccountRequest {
+  accountUid?: string
   accountDisplayName?: string
-  credentials: Record<string, unknown>
+  initialCapital: number
+  commissionRate?: number
+  slippageBps?: number
 }
 
-export interface UpdateBrokerAccountRequest {
-  accountDisplayName?: string
-  status?: BrokerAccountStatus
-  credentials?: Record<string, unknown>
-}
-
-export interface VerifyBrokerAccountResponse {
-  account: BrokerAccountItem
+export interface BindSimulationAccountResponse {
+  account: Record<string, unknown>
   verifyResult: Record<string, unknown>
 }

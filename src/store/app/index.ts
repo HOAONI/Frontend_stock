@@ -1,11 +1,8 @@
 import type { GlobalThemeOverrides } from 'naive-ui'
 import { local, setLocale } from '@/utils'
-import { colord } from 'colord'
-import { set } from 'radash'
-import themeConfig from './theme.json'
-import type { ProLayoutMode } from 'pro-naive-ui'
 
 export type TransitionAnimation = '' | 'fade-slide' | 'fade-bottom' | 'fade-scale' | 'zoom-fade' | 'zoom-out'
+export type LayoutMode = 'vertical' | 'full-content'
 
 const { VITE_DEFAULT_LANG, VITE_COPYRIGHT_INFO } = import.meta.env
 
@@ -24,8 +21,7 @@ export const useAppStore = defineStore('app-store', {
     return {
       footerText: VITE_COPYRIGHT_INFO,
       lang: VITE_DEFAULT_LANG,
-      theme: themeConfig as GlobalThemeOverrides,
-      primaryColor: themeConfig.common.primaryColor,
+      theme: {} as GlobalThemeOverrides,
       collapsed: false,
       grayMode: false,
       colorWeak: false,
@@ -39,7 +35,7 @@ export const useAppStore = defineStore('app-store', {
       showWatermark: false,
       showSetting: false,
       transitionAnimation: 'fade-slide' as TransitionAnimation,
-      layoutMode: 'vertical' as ProLayoutMode,
+      layoutMode: 'vertical' as LayoutMode,
     }
   },
   getters: {
@@ -59,8 +55,7 @@ export const useAppStore = defineStore('app-store', {
   actions: {
     // 重置所有设置
     resetAlltheme() {
-      this.theme = themeConfig
-      this.primaryColor = '#18a058'
+      this.theme = {}
       this.collapsed = false
       this.grayMode = false
       this.colorWeak = false
@@ -73,23 +68,11 @@ export const useAppStore = defineStore('app-store', {
       this.showWatermark = false
       this.transitionAnimation = 'fade-slide'
       this.layoutMode = 'vertical'
-
-      // 重置所有配色
-      this.setPrimaryColor(this.primaryColor)
     },
     setAppLang(lang: App.lang) {
       setLocale(lang)
       local.set('lang', lang)
       this.lang = lang
-    },
-    /* 设置主题色 */
-    setPrimaryColor(color: string) {
-      const brightenColor = colord(color).lighten(0.05).toHex()
-      const darkenColor = colord(color).darken(0.05).toHex()
-      set(this.theme, 'common.primaryColor', color)
-      set(this.theme, 'common.primaryColorHover', brightenColor)
-      set(this.theme, 'common.primaryColorPressed', darkenColor)
-      set(this.theme, 'common.primaryColorSuppl', brightenColor)
     },
     setColorMode(mode: 'light' | 'dark' | 'auto') {
       store.value = mode

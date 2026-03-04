@@ -93,7 +93,7 @@ function handleSelect(key: string | number) {
 
 <template>
   <n-dropdown trigger="click" :options="options" @select="handleSelect">
-    <n-avatar round class="cursor-pointer">
+    <n-avatar class="cursor-pointer" aria-label="用户菜单">
       <template #fallback>
         <div class="wh-full flex-center">
           <icon-park-outline-user />

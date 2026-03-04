@@ -44,7 +44,7 @@ export function useTaskStream(options: UseTaskStreamOptions = {}) {
 
   function connect() {
     disconnect()
-    source = new EventSource(getTaskStreamUrl())
+    source = new EventSource(getTaskStreamUrl(), { withCredentials: true })
 
     source.addEventListener('connected', () => {
       isConnected.value = true

@@ -3,48 +3,27 @@ import { useAppStore } from '@/store'
 
 const router = useRouter()
 const route = useRoute()
-const routes = computed(() => {
-  return route.matched
-})
 const appStore = useAppStore()
+
+const routes = computed(() => {
+  return route.matched.filter(item => Boolean(item.meta?.title))
+})
+
+function navigate(path: string) {
+  if (route.path !== path)
+    router.push(path)
+}
 </script>
 
 <template>
-  <TransitionGroup v-if="appStore.showBreadcrumb" name="list" tag="ul" style="display: flex; gap:1em;">
-    <n-el
-      v-for="(item) in routes"
-      :key="item.path"
-      tag="li" style="
-            color: var(--text-color-2);
-            transition: 0.3s var(--cubic-bezier-ease-in-out);
-          "
-      class="flex-center gap-2 cursor-pointer split"
-      @click="router.push(item.path)"
-    >
-      <nova-icon v-if="appStore.showBreadcrumbIcon" :icon="item.meta.icon" />
-      <span class="whitespace-nowrap">{{ $t(`route.${String(item.name)}`, item.meta.title) }}</span>
-    </n-el>
-  </TransitionGroup>
+  <n-breadcrumb v-if="appStore.showBreadcrumb">
+    <n-breadcrumb-item v-for="item in routes" :key="item.path">
+      <n-button text size="small" @click="navigate(item.path)">
+        <template #icon>
+          <nova-icon v-if="appStore.showBreadcrumbIcon" :icon="item.meta.icon" />
+        </template>
+        {{ $t(`route.${String(item.name)}`, item.meta.title as string) }}
+      </n-button>
+    </n-breadcrumb-item>
+  </n-breadcrumb>
 </template>
-
-<style lang="scss">
-.split:not(:first-child)::before {
-   content: '/';
-   padding-right:0.6em;
-}
-
-.list-move,
-.list-enter-active,
-.list-leave-active {
-  transition: all 0.3s ease;
-}
-
-.list-enter-from,.list-leave-to {
-  opacity: 0;
-  transform: translateX(-30px);
-}
-
-.list-leave-active {
-  position: absolute;
-}
-</style>
