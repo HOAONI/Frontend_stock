@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { DataTableColumns } from 'naive-ui'
 import { NTag } from 'naive-ui'
-import { GRID_GAP, SPACING } from '@/constants/design-tokens'
+import { BREAKPOINT_SPAN, CARD_DENSITY, DASHBOARD_LAYOUT, SPACING } from '@/constants/design-tokens'
+import { trendValueStyle } from '@/constants/semantic-ui'
 import { useBrokerAccountStore, useSessionStore, useTradingAccountStore } from '@/store'
 import { formatDateTime } from '@/utils/stock'
 import { h } from 'vue'
@@ -33,6 +34,17 @@ const userLabel = computed(() => sessionStore.currentUser?.username || '交易�
 
 const dashboardError = computed(() => {
   return brokerAccountStore.error || tradingAccountStore.overviewError || tradingAccountStore.detailsError
+})
+
+const dataSourceTagType = computed<'success' | 'warning' | 'error' | 'default'>(() => {
+  const source = homeSnapshot.value.dataSource?.toLowerCase()
+  if (source?.includes('api'))
+    return 'success'
+  if (source?.includes('derived'))
+    return 'warning'
+  if (source?.includes('mock'))
+    return 'error'
+  return 'default'
 })
 
 const accountStateLabel = computed(() => {
@@ -88,16 +100,6 @@ const marketRatio = computed(() => {
     return 0
   return Math.min(100, Math.max(0, Number(((marketValueForRatio.value / total) * 100).toFixed(1))))
 })
-
-function trendValueStyle(value: number | null | undefined) {
-  if (value == null)
-    return undefined
-  if (value > 0)
-    return { color: 'var(--n-success-color)' }
-  if (value < 0)
-    return { color: 'var(--n-error-color)' }
-  return undefined
-}
 
 const pnlDailyStyle = computed(() => trendValueStyle(homeKpis.value.pnlDaily))
 const pnlTotalStyle = computed(() => trendValueStyle(homeKpis.value.pnlTotal))
@@ -209,9 +211,9 @@ onMounted(async () => {
 
 <template>
   <n-space vertical :size="SPACING.lg">
-    <n-grid :cols="24" :x-gap="GRID_GAP.outer" :y-gap="GRID_GAP.outer" responsive="screen">
+    <n-grid :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.outerGap" :y-gap="DASHBOARD_LAYOUT.outerGap" responsive="screen">
       <n-grid-item :span="24" :l-span="16">
-        <n-card title="账户总览">
+        <n-card title="账户总览" :size="CARD_DENSITY.default">
           <template #header-extra>
             <NTag :type="accountStateType">
               {{ accountStateLabel }}
@@ -224,9 +226,9 @@ onMounted(async () => {
             </n-text>
 
             <template v-if="!isMobile">
-              <n-grid :cols="24" :x-gap="GRID_GAP.inner" :y-gap="GRID_GAP.inner">
-                <n-grid-item :span="6">
-                  <n-card embedded size="small">
+              <n-grid :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.innerGap" :y-gap="DASHBOARD_LAYOUT.innerGap">
+                <n-grid-item :span="BREAKPOINT_SPAN.desktop4">
+                  <n-card embedded :size="CARD_DENSITY.embedded">
                     <n-text depth="3">
                       总资产（CNY）
                     </n-text>
@@ -237,8 +239,8 @@ onMounted(async () => {
                   </n-card>
                 </n-grid-item>
 
-                <n-grid-item :span="6">
-                  <n-card embedded size="small">
+                <n-grid-item :span="BREAKPOINT_SPAN.desktop4">
+                  <n-card embedded :size="CARD_DENSITY.embedded">
                     <n-text depth="3">
                       当日盈亏
                     </n-text>
@@ -249,8 +251,8 @@ onMounted(async () => {
                   </n-card>
                 </n-grid-item>
 
-                <n-grid-item :span="6">
-                  <n-card embedded size="small">
+                <n-grid-item :span="BREAKPOINT_SPAN.desktop4">
+                  <n-card embedded :size="CARD_DENSITY.embedded">
                     <n-text depth="3">
                       累计盈亏
                     </n-text>
@@ -261,8 +263,8 @@ onMounted(async () => {
                   </n-card>
                 </n-grid-item>
 
-                <n-grid-item :span="6">
-                  <n-card embedded size="small">
+                <n-grid-item :span="BREAKPOINT_SPAN.desktop4">
+                  <n-card embedded :size="CARD_DENSITY.embedded">
                     <n-text depth="3">
                       收益率
                     </n-text>
@@ -278,9 +280,9 @@ onMounted(async () => {
                 </n-grid-item>
               </n-grid>
 
-              <n-grid :cols="24" :x-gap="GRID_GAP.inner" :y-gap="GRID_GAP.inner">
+              <n-grid :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.innerGap" :y-gap="DASHBOARD_LAYOUT.innerGap">
                 <n-grid-item :span="12">
-                  <n-card embedded size="small">
+                  <n-card embedded :size="CARD_DENSITY.embedded">
                     <n-space vertical :size="SPACING.md">
                       <n-space justify="space-between" align="center">
                         <n-text depth="3">
@@ -298,7 +300,7 @@ onMounted(async () => {
                 </n-grid-item>
 
                 <n-grid-item :span="12">
-                  <n-card embedded size="small">
+                  <n-card embedded :size="CARD_DENSITY.embedded">
                     <n-space vertical :size="SPACING.md">
                       <n-space justify="space-between" align="center">
                         <n-text depth="3">
@@ -315,9 +317,9 @@ onMounted(async () => {
             </template>
 
             <template v-else>
-              <n-grid :cols="24" :x-gap="GRID_GAP.inner" :y-gap="GRID_GAP.inner">
+              <n-grid :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.innerGap" :y-gap="DASHBOARD_LAYOUT.innerGap">
                 <n-grid-item :span="24">
-                  <n-card embedded size="small">
+                  <n-card embedded :size="CARD_DENSITY.embedded">
                     <n-text depth="3">
                       总资产（CNY）
                     </n-text>
@@ -329,7 +331,7 @@ onMounted(async () => {
                 </n-grid-item>
 
                 <n-grid-item :span="24">
-                  <n-card embedded size="small">
+                  <n-card embedded :size="CARD_DENSITY.embedded">
                     <n-text depth="3">
                       当日盈亏
                     </n-text>
@@ -341,7 +343,7 @@ onMounted(async () => {
                 </n-grid-item>
 
                 <n-grid-item :span="24">
-                  <n-card embedded size="small">
+                  <n-card embedded :size="CARD_DENSITY.embedded">
                     <n-text depth="3">
                       累计盈亏
                     </n-text>
@@ -353,7 +355,7 @@ onMounted(async () => {
                 </n-grid-item>
 
                 <n-grid-item :span="24">
-                  <n-card embedded size="small">
+                  <n-card embedded :size="CARD_DENSITY.embedded">
                     <n-text depth="3">
                       收益率
                     </n-text>
@@ -369,7 +371,7 @@ onMounted(async () => {
                 </n-grid-item>
 
                 <n-grid-item :span="24">
-                  <n-card embedded size="small">
+                  <n-card embedded :size="CARD_DENSITY.embedded">
                     <n-space vertical :size="SPACING.md">
                       <n-space justify="space-between" align="center">
                         <n-text depth="3">
@@ -387,7 +389,7 @@ onMounted(async () => {
                 </n-grid-item>
 
                 <n-grid-item :span="24">
-                  <n-card embedded size="small">
+                  <n-card embedded :size="CARD_DENSITY.embedded">
                     <n-space vertical :size="SPACING.md">
                       <n-space justify="space-between" align="center">
                         <n-text depth="3">
@@ -407,20 +409,33 @@ onMounted(async () => {
       </n-grid-item>
 
       <n-grid-item :span="24" :l-span="8">
-        <n-card title="状态与操作">
+        <n-card title="状态与操作" :size="CARD_DENSITY.default">
           <n-space vertical :size="SPACING.md">
             <n-descriptions :column="1" bordered size="small" label-placement="left">
               <n-descriptions-item label="账户">
-                {{ homeSnapshot.accountLabel }}
+                <n-space align="center" :size="SPACING.xs">
+                  <NTag size="small" :type="accountStateType">
+                    {{ accountStateLabel }}
+                  </NTag>
+                  <n-text depth="3">
+                    {{ homeSnapshot.accountLabel }}
+                  </n-text>
+                </n-space>
               </n-descriptions-item>
               <n-descriptions-item label="提供方">
-                {{ homeSnapshot.providerLabel }}
+                <NTag size="small" type="info">
+                  {{ homeSnapshot.providerLabel }}
+                </NTag>
               </n-descriptions-item>
               <n-descriptions-item label="来源">
-                {{ homeSnapshot.dataSource }}
+                <NTag size="small" :type="dataSourceTagType">
+                  {{ homeSnapshot.dataSource }}
+                </NTag>
               </n-descriptions-item>
               <n-descriptions-item label="最近同步">
-                {{ homeSnapshot.snapshotAt ? formatDateTime(homeSnapshot.snapshotAt) : '--' }}
+                <NTag size="small" :type="homeSnapshot.snapshotAt ? 'success' : 'warning'">
+                  {{ homeSnapshot.snapshotAt ? formatDateTime(homeSnapshot.snapshotAt) : '--' }}
+                </NTag>
               </n-descriptions-item>
             </n-descriptions>
 
@@ -456,9 +471,19 @@ onMounted(async () => {
       </n-grid-item>
     </n-grid>
 
-    <n-grid v-if="!isMobile" :cols="24" :x-gap="GRID_GAP.outer" :y-gap="GRID_GAP.outer" responsive="screen">
+    <n-grid v-if="!isMobile" :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.outerGap" :y-gap="DASHBOARD_LAYOUT.outerGap" responsive="screen">
       <n-grid-item :span="24" :l-span="12">
-        <n-card title="近期委托">
+        <n-card title="近期委托" :size="CARD_DENSITY.default">
+          <template #header-extra>
+            <n-space :size="SPACING.xs" align="center">
+              <NTag size="small" type="info">
+                {{ `最近 ${homeRecentOrders.length} 条` }}
+              </NTag>
+              <n-button tertiary size="small" @click="toTradingCenter">
+                查看明细
+              </n-button>
+            </n-space>
+          </template>
           <n-empty v-if="!homeRecentOrders.length" description="暂无委托数据" />
           <n-data-table
             v-else
@@ -473,7 +498,17 @@ onMounted(async () => {
       </n-grid-item>
 
       <n-grid-item :span="24" :l-span="12">
-        <n-card title="近期成交">
+        <n-card title="近期成交" :size="CARD_DENSITY.default">
+          <template #header-extra>
+            <n-space :size="SPACING.xs" align="center">
+              <NTag size="small" type="success">
+                {{ `最近 ${homeRecentTrades.length} 条` }}
+              </NTag>
+              <n-button tertiary size="small" @click="toTradingCenter">
+                查看明细
+              </n-button>
+            </n-space>
+          </template>
           <n-empty v-if="!homeRecentTrades.length" description="暂无成交数据" />
           <n-data-table
             v-else

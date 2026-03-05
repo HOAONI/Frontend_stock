@@ -77,28 +77,40 @@ export function useEcharts(ref: string, chartOptions: Ref<ECOption>) {
   const appStore = useAppStore()
 
   let chart: echarts.ECharts | null = null
+  let initializing = false
 
   const { width, height } = useElementSize(el)
 
-  const isRendered = () => Boolean(el && chart)
+  const isRendered = () => Boolean(el.value && chart)
 
-  async function render() {
-    // 宽或高不存在时不渲染
-    if (!width || !height)
+  const hasValidSize = () => Number(width.value) > 0 && Number(height.value) > 0
+
+  async function initIfNeeded() {
+    if (chart || initializing)
+      return
+    if (!el.value || !hasValidSize())
       return
 
-    const chartTheme = appStore.colorMode === 'dark' ? 'dark' : 'light'
-    await nextTick()
-    if (el) {
+    initializing = true
+    try {
+      await nextTick()
+      if (chart || !el.value || !hasValidSize())
+        return
+
+      const chartTheme = appStore.colorMode === 'dark' ? 'dark' : 'light'
       chart = echarts.init(el.value, chartTheme)
-      update(chartOptions.value)
+      chart.setOption({ backgroundColor: 'transparent', ...chartOptions.value })
+    }
+    finally {
+      initializing = false
     }
   }
 
   async function update(updateOptions: ECOption) {
-    if (isRendered()) {
+    if (!chart)
+      await initIfNeeded()
+    if (isRendered())
       chart!.setOption({ backgroundColor: 'transparent', ...updateOptions })
-    }
   }
 
   function destroy() {
@@ -106,17 +118,33 @@ export function useEcharts(ref: string, chartOptions: Ref<ECOption>) {
     chart = null
   }
 
-  watch([width, height], async ([newWidth, newHeight]) => {
+  watch([() => el.value, width, height], async ([element, newWidth, newHeight]) => {
+    if (!element) {
+      destroy()
+      return
+    }
     if (isRendered() && newWidth && newHeight)
       chart?.resize()
+    else
+      await initIfNeeded()
+  }, { immediate: true })
+
+  watch(() => appStore.colorMode, async () => {
+    if (!el.value)
+      return
+    const updateOptions = chartOptions.value
+    destroy()
+    await initIfNeeded()
+    if (chart)
+      chart.setOption({ backgroundColor: 'transparent', ...updateOptions })
   })
 
-  watch(chartOptions, (newValue) => {
-    update(newValue)
+  watch(chartOptions, async (newValue) => {
+    await update(newValue)
   })
 
-  onMounted(() => {
-    render()
+  onMounted(async () => {
+    await initIfNeeded()
   })
   onUnmounted(() => {
     destroy()

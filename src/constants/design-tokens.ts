@@ -19,3 +19,21 @@ export const CHART_HEIGHT = {
   compactDesktop: 260,
   compactMobile: 220,
 } as const
+
+export const DASHBOARD_LAYOUT = {
+  cols: 24,
+  outerGap: 16,
+  innerGap: 12,
+} as const
+
+export const CARD_DENSITY = {
+  default: 'small',
+  embedded: 'small',
+} as const
+
+export const BREAKPOINT_SPAN = {
+  desktop4: 6,
+  desktop3: 8,
+  desktop2: 12,
+  mobile: 24,
+} as const

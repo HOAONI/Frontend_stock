@@ -1,21 +1,23 @@
 <script setup lang="ts">
+import { useEventListener } from '@vueuse/core'
 import { useAppStore } from '@/store'
 
 const appStore = useAppStore()
 
-let previousLayoutMode = appStore.layoutMode
-
 function enterFullContent() {
-  previousLayoutMode = appStore.layoutMode
   appStore.layoutMode = 'full-content'
 }
 
 function exitFullContent() {
-  if (previousLayoutMode === 'full-content' || !previousLayoutMode) {
-    previousLayoutMode = 'vertical'
+  if (appStore.layoutMode === 'full-content') {
+    appStore.layoutMode = 'vertical'
   }
-  appStore.layoutMode = previousLayoutMode
 }
+
+useEventListener(window, 'keydown', (event: KeyboardEvent) => {
+  if (event.key === 'Escape' && appStore.layoutMode === 'full-content')
+    exitFullContent()
+})
 </script>
 
 <template>

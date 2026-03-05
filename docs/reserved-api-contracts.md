@@ -72,20 +72,86 @@ SSE events (optional):
 
 ## Backtest
 
-### POST /api/v1/backtest/compare
+### POST /api/v1/backtest/strategy/run
 Request:
 ```json
 {
   "code": "600519",
-  "eval_window_days_list": [5, 10, 20]
+  "start_date": "2024-01-01",
+  "end_date": "2024-12-31",
+  "strategy_codes": ["ma20_trend", "rsi14_mean_reversion"],
+  "initial_capital": 100000,
+  "commission_rate": 0.0003,
+  "slippage_bps": 2
 }
 ```
 
 Response:
 ```json
 {
+  "run_group_id": 1001,
+  "code": "600519",
+  "engine_version": "backtrader_v1",
+  "requested_range": { "start_date": "2024-01-01", "end_date": "2024-12-31" },
+  "effective_range": { "start_date": "2024-01-02", "end_date": "2024-12-31" },
   "items": [
     {
+      "run_id": 2001,
+      "strategy_code": "ma20_trend",
+      "strategy_name": "MA20 Trend",
+      "strategy_version": "v1",
+      "params": {},
+      "metrics": {},
+      "benchmark": {},
+      "trades": [],
+      "equity": []
+    }
+  ],
+  "legacy_event_backtest": false
+}
+```
+
+### GET /api/v1/backtest/strategy/runs
+Query:
+- code(optional)
+- strategy_code(optional)
+- start_date(optional)
+- end_date(optional)
+- page
+- limit
+
+### GET /api/v1/backtest/strategy/runs/:run_group_id
+Response:
+- same shape as `/strategy/run` response
+
+### Legacy event-backtest APIs (kept for compatibility)
+- `/api/v1/backtest/run`
+- `/api/v1/backtest/results`
+- `/api/v1/backtest/performance`
+- `/api/v1/backtest/performance/:code`
+- `/api/v1/backtest/compare`
+
+Legacy responses include `legacy_event_backtest=true`.
+
+### POST /api/v1/backtest/compare
+Request:
+```json
+{
+  "code": "600519",
+  "eval_window_days_list": [5, 10, 20],
+  "strategy_codes": ["agent_v1", "ma20_trend", "rsi14_mean_reversion"]
+}
+```
+
+`strategy_codes` is optional. When omitted, backend defaults to all 3 strategies.
+
+Response:
+```json
+{
+  "items": [
+    {
+      "strategy_code": "agent_v1",
+      "strategy_name": "Agent v1",
       "eval_window_days": 5,
       "total_evaluations": 100,
       "completed_count": 93,
@@ -93,7 +159,8 @@ Response:
       "win_rate_pct": 52.2,
       "avg_simulated_return_pct": 1.32,
       "avg_stock_return_pct": 0.77,
-      "max_drawdown_pct": -6.1
+      "max_drawdown_pct": -6.1,
+      "data_source": "api"
     }
   ]
 }

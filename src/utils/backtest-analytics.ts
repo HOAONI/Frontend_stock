@@ -51,11 +51,15 @@ export function buildCurves(results: BacktestResultItem[]): CurvePoint[] {
 
 export function buildDistribution(performance: PerformanceMetrics | null): TradeDistribution {
   return {
-    longCount: Number(performance?.longCount ?? 0),
-    cashCount: Number(performance?.cashCount ?? 0),
-    winCount: Number(performance?.winCount ?? 0),
-    lossCount: Number(performance?.lossCount ?? 0),
-    neutralCount: Number(performance?.neutralCount ?? 0),
+    positionDistribution: {
+      longCount: Number(performance?.longCount ?? 0),
+      cashCount: Number(performance?.cashCount ?? 0),
+    },
+    outcomeDistribution: {
+      winCount: Number(performance?.winCount ?? 0),
+      lossCount: Number(performance?.lossCount ?? 0),
+      neutralCount: Number(performance?.neutralCount ?? 0),
+    },
   }
 }
 

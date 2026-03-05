@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { useEcharts } from '@/hooks/useEcharts'
 import type { ECOption } from '@/hooks/useEcharts'
-import { CHART_HEIGHT, GRID_GAP, SPACING } from '@/constants/design-tokens'
+import { BREAKPOINT_SPAN, CARD_DENSITY, CHART_HEIGHT, DASHBOARD_LAYOUT, GRID_GAP, SPACING } from '@/constants/design-tokens'
+import { trendSemanticType, trendValueStyle } from '@/constants/semantic-ui'
 import type { FactorSnapshot, IntradayPoint } from '@/types/market-analytics'
 import { fetchMarketBundle, fetchQuoteOnly } from '@/services/market-service'
 import { formatDateTime, formatPct, validateStockCode } from '@/utils/stock'
+import type { CSSProperties } from 'vue'
 
 const stockCode = ref('600519')
 const days = ref(120)
@@ -95,6 +97,53 @@ const sourceText = computed(() => {
   if (sourceTag.value === 'derived')
     return '派生数据'
   return '模拟数据'
+})
+
+const quoteChangeType = computed(() => trendSemanticType(quote.value?.changePercent, {
+  positive: 'error',
+  negative: 'success',
+  neutral: 'info',
+}))
+
+interface MarketKpiCard {
+  key: string
+  label: string
+  value: number | null
+  suffix?: string
+  precision: number
+  valueStyle?: CSSProperties
+}
+
+const marketKpiCards = computed<MarketKpiCard[]>(() => {
+  return [
+    {
+      key: 'currentPrice',
+      label: '最新价',
+      value: quote.value?.currentPrice ?? null,
+      precision: 2,
+    },
+    {
+      key: 'change',
+      label: '涨跌额',
+      value: quote.value?.change ?? null,
+      precision: 2,
+      valueStyle: trendValueStyle(quote.value?.change, { positive: 'error', negative: 'success', neutral: 'info' }),
+    },
+    {
+      key: 'changePercent',
+      label: '涨跌幅',
+      value: quote.value?.changePercent ?? null,
+      suffix: '%',
+      precision: 2,
+      valueStyle: trendValueStyle(quote.value?.changePercent, { positive: 'error', negative: 'success', neutral: 'info' }),
+    },
+    {
+      key: 'volume',
+      label: '成交量',
+      value: quote.value?.volume ?? null,
+      precision: 0,
+    },
+  ]
 })
 
 const primaryChartStyle = computed(() => {
@@ -298,7 +347,7 @@ onUnmounted(() => {
 
 <template>
   <n-space vertical :size="SPACING.lg">
-    <n-card title="行情控制台" size="small">
+    <n-card title="行情控制台" :size="CARD_DENSITY.default">
       <template #header-extra>
         <n-space :size="SPACING.sm" :wrap="true" align="center">
           <n-tag :type="autoRefresh ? 'success' : 'warning'">
@@ -320,47 +369,81 @@ onUnmounted(() => {
         </n-space>
       </template>
 
-      <n-grid :cols="24" :x-gap="GRID_GAP.inner" :y-gap="GRID_GAP.inner" responsive="screen">
-        <n-grid-item :span="24" :m-span="8" :l-span="5">
-          <n-input v-model:value="stockCode" clearable placeholder="股票代码" />
-        </n-grid-item>
-        <n-grid-item :span="24" :m-span="8" :l-span="4">
-          <n-input-number v-model:value="days" :min="10" :max="365" :step="10">
-            <template #prefix>
-              天数
-            </template>
-          </n-input-number>
-        </n-grid-item>
-        <n-grid-item :span="24" :m-span="8" :l-span="5">
-          <n-switch v-model:value="autoRefresh">
-            <template #checked>
-              自动刷新
-            </template>
-            <template #unchecked>
-              已暂停
-            </template>
-          </n-switch>
-        </n-grid-item>
-        <n-grid-item :span="24" :m-span="12" :l-span="5">
-          <n-button type="primary" :loading="loading" @click="loadMarket">
-            加载行情
-          </n-button>
-        </n-grid-item>
-        <n-grid-item :span="24" :m-span="12" :l-span="5">
-          <n-button tertiary @click="clearIntraday">
-            清空分时
-          </n-button>
-        </n-grid-item>
-      </n-grid>
+      <n-space vertical :size="SPACING.md">
+        <n-text depth="3">
+          参数组
+        </n-text>
+        <n-grid :cols="24" :x-gap="GRID_GAP.inner" :y-gap="GRID_GAP.inner" responsive="screen">
+          <n-grid-item :span="24" :m-span="8" :l-span="6">
+            <n-input v-model:value="stockCode" clearable placeholder="股票代码" />
+          </n-grid-item>
+          <n-grid-item :span="24" :m-span="8" :l-span="6">
+            <n-input-number v-model:value="days" :min="10" :max="365" :step="10">
+              <template #prefix>
+                天数
+              </template>
+            </n-input-number>
+          </n-grid-item>
+          <n-grid-item :span="24" :m-span="8" :l-span="6">
+            <n-switch v-model:value="autoRefresh">
+              <template #checked>
+                自动刷新
+              </template>
+              <template #unchecked>
+                已暂停
+              </template>
+            </n-switch>
+          </n-grid-item>
+        </n-grid>
+        <n-space justify="space-between" align="center" :wrap="true">
+          <n-text depth="3">
+            操作组
+          </n-text>
+          <n-space :size="SPACING.sm" :wrap="true">
+            <n-button type="primary" :loading="loading" @click="loadMarket">
+              加载行情
+            </n-button>
+            <n-button tertiary @click="clearIntraday">
+              清空分时
+            </n-button>
+          </n-space>
+        </n-space>
+      </n-space>
     </n-card>
 
-    <n-card v-if="warnings.length > 0" title="数据提醒" size="small">
+    <n-card v-if="warnings.length > 0" title="数据提醒" :size="CARD_DENSITY.default">
       <n-space vertical :size="SPACING.sm">
         <n-alert v-for="item in warnings" :key="item" type="warning" :show-icon="false">
           {{ item }}
         </n-alert>
       </n-space>
     </n-card>
+
+    <n-grid :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.outerGap" :y-gap="DASHBOARD_LAYOUT.outerGap" responsive="screen">
+      <n-grid-item
+        v-for="item in marketKpiCards"
+        :key="item.key"
+        :span="BREAKPOINT_SPAN.mobile"
+        :m-span="BREAKPOINT_SPAN.desktop2"
+        :l-span="BREAKPOINT_SPAN.desktop4"
+      >
+        <n-card embedded :size="CARD_DENSITY.embedded">
+          <n-space vertical :size="SPACING.xs">
+            <n-text depth="3">
+              {{ item.label }}
+            </n-text>
+            <n-statistic :value="item.value ?? 0" :precision="item.precision" :value-style="item.valueStyle">
+              <template v-if="item.suffix" #suffix>
+                {{ item.suffix }}
+              </template>
+            </n-statistic>
+            <n-text v-if="item.value == null" depth="3">
+              --
+            </n-text>
+          </n-space>
+        </n-card>
+      </n-grid-item>
+    </n-grid>
 
     <n-grid :cols="24" :x-gap="GRID_GAP.outer" :y-gap="GRID_GAP.outer" responsive="screen">
       <n-grid-item :span="24" :l-span="16">
@@ -381,7 +464,7 @@ onUnmounted(() => {
                 {{ quote.currentPrice }}
               </n-descriptions-item>
               <n-descriptions-item label="涨跌幅">
-                <n-tag :type="(quote.changePercent || 0) >= 0 ? 'error' : 'success'">
+                <n-tag :type="quoteChangeType">
                   {{ formatPct(quote.changePercent) }}
                 </n-tag>
               </n-descriptions-item>
@@ -415,7 +498,7 @@ onUnmounted(() => {
       </n-grid-item>
     </n-grid>
 
-    <n-card title="分时轮询曲线" size="small">
+    <n-card title="分时轮询曲线" :size="CARD_DENSITY.default">
       <div ref="intradayRef" :style="secondaryChartStyle" />
     </n-card>
   </n-space>

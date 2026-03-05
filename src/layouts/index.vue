@@ -155,7 +155,12 @@ watch(
       </n-layout-header>
 
       <n-layout-content>
-        <n-card v-if="appStore.showTabs && appStore.layoutMode === 'vertical'" :bordered="false" size="small">
+        <n-card
+          v-if="appStore.showTabs || appStore.layoutMode === 'full-content'"
+          v-show="appStore.showTabs && appStore.layoutMode === 'vertical'"
+          :bordered="false"
+          size="small"
+        >
           <TabBar />
         </n-card>
         <Content />

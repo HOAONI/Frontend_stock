@@ -49,6 +49,8 @@ export interface BacktestResultsResponse {
   total: number
   page: number
   limit: number
+  evalWindowDays?: number
+  metricDefinitionVersion?: string
   items: BacktestResultItem[]
 }
 
@@ -67,6 +69,8 @@ export interface PerformanceMetrics {
   lossCount: number
   neutralCount: number
   directionAccuracyPct?: number | null
+  predictionWinRatePct?: number | null
+  tradeWinRatePct?: number | null
   winRatePct?: number | null
   neutralRatePct?: number | null
   avgStockReturnPct?: number | null
@@ -77,4 +81,5 @@ export interface PerformanceMetrics {
   avgDaysToFirstHit?: number | null
   adviceBreakdown: Record<string, unknown>
   diagnostics: Record<string, unknown>
+  metricDefinitionVersion?: string
 }

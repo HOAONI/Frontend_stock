@@ -1,4 +1,6 @@
 import type {
+  AddTradingFundsRequest,
+  TradingAddFundsResponse,
   TradingOrdersResponse,
   TradingPerformanceResponse,
   TradingPositionsResponse,
@@ -49,4 +51,15 @@ export async function getTradingTrades(params: TradingQueryParams = {}): Promise
     params: buildQuery(params),
   })
   return toCamelCase<TradingTradesResponse>(data)
+}
+
+export async function addTradingFunds(payload: AddTradingFundsRequest): Promise<TradingAddFundsResponse> {
+  const body: Record<string, unknown> = {
+    amount: payload.amount,
+  }
+  if (payload.note !== undefined)
+    body.note = payload.note
+
+  const { data } = await client.post('/api/v1/users/me/trading/funds/add', body)
+  return toCamelCase<TradingAddFundsResponse>(data)
 }

@@ -2,6 +2,11 @@ export interface TradingQueryParams {
   refresh?: boolean
 }
 
+export interface AddTradingFundsRequest {
+  amount: number
+  note?: string
+}
+
 export interface TradingAccountMeta {
   brokerAccountId: number
   brokerCode: string
@@ -46,4 +51,19 @@ export interface TradingOrdersResponse extends TradingAccountMeta {
 export interface TradingTradesResponse extends TradingAccountMeta {
   total: number
   items: Array<Record<string, unknown>>
+}
+
+export interface TradingFundChangePayload {
+  amount: number
+  note?: string | null
+  cashBefore?: number | null
+  cashAfter?: number | null
+  initialCapitalBefore?: number | null
+  initialCapitalAfter?: number | null
+}
+
+export interface TradingAddFundsResponse extends TradingAccountMeta {
+  fundChange: TradingFundChangePayload
+  summary: Record<string, unknown>
+  performance: TradingPerformancePayload
 }

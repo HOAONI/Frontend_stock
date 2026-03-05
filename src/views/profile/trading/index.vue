@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DataTableColumns } from 'naive-ui'
+import { addTradingFunds } from '@/api/trading-account'
 import { useBrokerAccountStore, useTradingAccountStore } from '@/store'
 import { formatDateTime, formatPct } from '@/utils/stock'
 
@@ -8,6 +9,7 @@ const tradingAccountStore = useTradingAccountStore()
 
 const forcingRefresh = ref(false)
 const binding = ref(false)
+const funding = ref(false)
 const failedWithHistoricalAccountUid = ref(false)
 
 const bindForm = reactive({
@@ -16,6 +18,11 @@ const bindForm = reactive({
   initialCapital: 100000,
   commissionRate: 0.0003,
   slippageBps: 2,
+})
+
+const addFundsForm = reactive({
+  amount: 10000,
+  note: '',
 })
 
 const simulationStatus = computed(() => brokerAccountStore.simulationStatus)
@@ -111,6 +118,12 @@ function validateBindForm(): string | null {
   return null
 }
 
+function validateAddFundsForm(): string | null {
+  if (!Number.isFinite(addFundsForm.amount) || Number(addFundsForm.amount) <= 0)
+    return '增加资金金额必须大于 0'
+  return null
+}
+
 async function loadSimulationStatus(silent = false): Promise<boolean> {
   try {
     await brokerAccountStore.loadSimulationStatus()
@@ -185,6 +198,37 @@ async function bindSimulationAccountNow() {
   }
   finally {
     binding.value = false
+  }
+}
+
+function extractActionError(error: unknown, fallback: string): string {
+  const payload = error as { response?: { data?: { message?: string } } }
+  const message = String(payload?.response?.data?.message ?? '').trim()
+  return message || fallback
+}
+
+async function addFundsNow() {
+  const validationError = validateAddFundsForm()
+  if (validationError) {
+    window.$message.error(validationError)
+    return
+  }
+
+  funding.value = true
+  try {
+    await addTradingFunds({
+      amount: Number(addFundsForm.amount),
+      note: addFundsForm.note.trim() || undefined,
+    })
+    await refreshTradingData(true, true)
+    window.$message.success('增加资金成功，账户快照已更新')
+    addFundsForm.note = ''
+  }
+  catch (error: unknown) {
+    window.$message.error(extractActionError(error, '增加资金失败'))
+  }
+  finally {
+    funding.value = false
   }
 }
 
@@ -321,6 +365,53 @@ watch(() => bindForm.accountUid, () => {
               </n-button>
             </n-space>
           </n-form>
+        </n-card>
+      </n-grid-item>
+
+      <n-grid-item :span="24" :l-span="13">
+        <n-card title="增加资金">
+          <n-space vertical :size="12">
+            <n-text depth="3">
+              仅支持正向入金。提交后会实时同步到前端概览、Backend 账户快照、Agent 运行上下文与 LLM 分析约束。
+            </n-text>
+
+            <n-empty
+              v-if="!canLoadTradingData"
+              description="初始化并校验模拟盘账户后可增加资金"
+            />
+            <n-form v-else label-placement="top">
+              <n-grid :cols="24" :x-gap="12" :y-gap="4" responsive="screen">
+                <n-grid-item :span="24" :m-span="10">
+                  <n-form-item label="增加金额">
+                    <n-input-number
+                      v-model:value="addFundsForm.amount"
+                      :min="0.01"
+                      :step="1000"
+                      :precision="2"
+                      class="w-full"
+                      placeholder="例如：10000"
+                    />
+                  </n-form-item>
+                </n-grid-item>
+                <n-grid-item :span="24" :m-span="14">
+                  <n-form-item label="备注（可选）">
+                    <n-input
+                      v-model:value="addFundsForm.note"
+                      maxlength="200"
+                      show-count
+                      placeholder="例如：策略追加资金"
+                    />
+                  </n-form-item>
+                </n-grid-item>
+              </n-grid>
+
+              <n-space justify="end">
+                <n-button type="primary" :loading="funding" @click="addFundsNow">
+                  确认增加资金
+                </n-button>
+              </n-space>
+            </n-form>
+          </n-space>
         </n-card>
       </n-grid-item>
 

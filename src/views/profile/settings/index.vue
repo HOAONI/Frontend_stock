@@ -23,6 +23,8 @@ const lastSavedAt = computed(() => {
     return '--'
   return formatDateTime(userSettingsStore.settings.updatedAt)
 })
+const CONTROL_WIDTH_STYLE = { width: '100%', maxWidth: '320px' }
+const TEXTAREA_WIDTH_STYLE = { width: '100%' }
 
 function syncTokenInput() {
   const ai = userSettingsStore.settings.ai
@@ -173,17 +175,32 @@ onMounted(() => {
               <n-grid :cols="24" :x-gap="12" :y-gap="12" responsive="screen">
                 <n-grid-item :span="24" :m-span="8">
                   <n-form-item label="仓位上限(%)">
-                    <n-input-number v-model:value="userSettingsStore.settings.strategy.positionMaxPct" :min="0" :max="100" class="w-full" />
+                    <n-input-number
+                      v-model:value="userSettingsStore.settings.strategy.positionMaxPct"
+                      :min="0"
+                      :max="100"
+                      :style="CONTROL_WIDTH_STYLE"
+                    />
                   </n-form-item>
                 </n-grid-item>
                 <n-grid-item :span="24" :m-span="8">
                   <n-form-item label="止损阈值(%)">
-                    <n-input-number v-model:value="userSettingsStore.settings.strategy.stopLossPct" :min="0" :max="100" class="w-full" />
+                    <n-input-number
+                      v-model:value="userSettingsStore.settings.strategy.stopLossPct"
+                      :min="0"
+                      :max="100"
+                      :style="CONTROL_WIDTH_STYLE"
+                    />
                   </n-form-item>
                 </n-grid-item>
                 <n-grid-item :span="24" :m-span="8">
                   <n-form-item label="止盈阈值(%)">
-                    <n-input-number v-model:value="userSettingsStore.settings.strategy.takeProfitPct" :min="0" :max="100" class="w-full" />
+                    <n-input-number
+                      v-model:value="userSettingsStore.settings.strategy.takeProfitPct"
+                      :min="0"
+                      :max="100"
+                      :style="CONTROL_WIDTH_STYLE"
+                    />
                   </n-form-item>
                 </n-grid-item>
               </n-grid>
@@ -198,7 +215,12 @@ onMounted(() => {
                 <n-grid :cols="24" :x-gap="12" :y-gap="12" responsive="screen">
                   <n-grid-item :span="24" :m-span="12">
                     <n-form-item label="初始资金">
-                      <n-input-number v-model:value="userSettingsStore.settings.simulation.initialCapital" :min="1" :precision="2" class="w-full" />
+                      <n-input-number
+                        v-model:value="userSettingsStore.settings.simulation.initialCapital"
+                        :min="1"
+                        :precision="2"
+                        :style="CONTROL_WIDTH_STYLE"
+                      />
                     </n-form-item>
                   </n-grid-item>
                   <n-grid-item :span="24">
@@ -208,6 +230,7 @@ onMounted(() => {
                         type="textarea"
                         :autosize="{ minRows: 2, maxRows: 4 }"
                         placeholder="可选，记录该模拟盘用途"
+                        :style="TEXTAREA_WIDTH_STYLE"
                       />
                     </n-form-item>
                   </n-grid-item>
@@ -218,12 +241,20 @@ onMounted(() => {
                     <n-grid :cols="24" :x-gap="12" :y-gap="12" responsive="screen">
                       <n-grid-item :span="24" :m-span="12">
                         <n-form-item label="账户名称">
-                          <n-input v-model:value="userSettingsStore.settings.simulation.accountName" placeholder="例如：我的模拟盘A" />
+                          <n-input
+                            v-model:value="userSettingsStore.settings.simulation.accountName"
+                            placeholder="例如：我的模拟盘A"
+                            :style="CONTROL_WIDTH_STYLE"
+                          />
                         </n-form-item>
                       </n-grid-item>
                       <n-grid-item :span="24" :m-span="12">
                         <n-form-item label="账户 ID">
-                          <n-input v-model:value="userSettingsStore.settings.simulation.accountId" placeholder="例如：SIM-001" />
+                          <n-input
+                            v-model:value="userSettingsStore.settings.simulation.accountId"
+                            placeholder="例如：SIM-001"
+                            :style="CONTROL_WIDTH_STYLE"
+                          />
                         </n-form-item>
                       </n-grid-item>
                     </n-grid>
@@ -238,40 +269,64 @@ onMounted(() => {
           <n-space vertical :size="16">
             <n-card title="个人 AI 配置">
               <n-grid :cols="24" :x-gap="12" :y-gap="12" responsive="screen">
-                <n-grid-item :span="24" :m-span="8">
+                <n-grid-item :span="24" :m-span="12">
                   <n-form-item label="提供商">
                     <n-select
                       v-model:value="userSettingsStore.settings.ai.provider"
                       :options="providerOptions"
+                      :style="CONTROL_WIDTH_STYLE"
                       @update:value="handleProviderChange"
                     />
                   </n-form-item>
                 </n-grid-item>
-                <n-grid-item :span="24" :m-span="16">
-                  <n-form-item label="Base URL">
-                    <n-input v-model:value="userSettingsStore.settings.ai.baseUrl" placeholder="例如：https://api.openai.com/v1" />
+                <n-grid-item :span="24" :m-span="12">
+                  <n-form-item label="模型">
+                    <n-input
+                      v-model:value="userSettingsStore.settings.ai.model"
+                      placeholder="例如：gpt-4o-mini / deepseek-chat"
+                      :style="CONTROL_WIDTH_STYLE"
+                    />
                   </n-form-item>
                 </n-grid-item>
                 <n-grid-item :span="24" :m-span="12">
-                  <n-form-item label="模型">
-                    <n-input v-model:value="userSettingsStore.settings.ai.model" placeholder="例如：gpt-4o-mini / deepseek-chat" />
+                  <n-form-item label="Base URL">
+                    <n-input
+                      v-model:value="userSettingsStore.settings.ai.baseUrl"
+                      placeholder="例如：https://api.openai.com/v1"
+                      :style="CONTROL_WIDTH_STYLE"
+                    />
                   </n-form-item>
                 </n-grid-item>
                 <n-grid-item :span="24" :m-span="12">
                   <n-form-item label="API Token">
-                    <n-input
-                      v-model:value="apiTokenInput"
-                      type="password"
-                      show-password-on="click"
-                      placeholder="留空清除，保持 ****** 表示不修改"
-                    />
+                    <n-space vertical :size="8">
+                      <n-input
+                        v-model:value="apiTokenInput"
+                        type="password"
+                        show-password-on="click"
+                        placeholder="输入新 Token 以更新"
+                        :style="CONTROL_WIDTH_STYLE"
+                      />
+                      <n-text depth="3">
+                        留空将清除 Token；保持 ****** 表示不修改。
+                      </n-text>
+                    </n-space>
                   </n-form-item>
                 </n-grid-item>
               </n-grid>
             </n-card>
 
             <n-card title="保存前校验">
-              <n-empty v-if="saveErrors.length === 0" description="当前无校验错误" />
+              <template #footer>
+                <n-space justify="end">
+                  <n-button @click="reloadFromServer">
+                    重新加载
+                  </n-button>
+                  <n-button type="primary" :loading="userSettingsStore.saving" @click="save">
+                    保存设置
+                  </n-button>
+                </n-space>
+              </template>
               <n-alert v-for="issue in saveErrors" :key="issue" type="error">
                 {{ issue }}
               </n-alert>
@@ -280,16 +335,5 @@ onMounted(() => {
         </n-grid-item>
       </n-grid>
     </n-spin>
-
-    <n-card>
-      <n-space justify="end">
-        <n-button @click="reloadFromServer">
-          重新加载
-        </n-button>
-        <n-button type="primary" :loading="userSettingsStore.saving" @click="save">
-          保存设置
-        </n-button>
-      </n-space>
-    </n-card>
   </n-space>
 </template>

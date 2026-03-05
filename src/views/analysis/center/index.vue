@@ -2,15 +2,17 @@
 import { analyzeAsync, DuplicateTaskError, getHistoryDetail, getHistoryList, getHistoryNews, getTaskList } from '@/api/analysis'
 import { useTaskQueueState } from '@/composables/useTaskQueueState'
 import { useTaskStream } from '@/composables/useTaskStream'
-import { GRID_GAP, SPACING } from '@/constants/design-tokens'
+import { CARD_DENSITY, DASHBOARD_LAYOUT, GRID_GAP, SPACING } from '@/constants/design-tokens'
 import { resolveAgentStages } from '@/services/analysis-service'
 import { useBrokerAccountStore } from '@/store'
 import type { AnalysisReport, HistoryItem, NewsIntelItem, TaskInfo } from '@/types/analysis'
 import type { AgentStageItem } from '@/types/agent-stages'
-import { formatDateTime, getRecentStartDate, toDateInputValue, validateStockCode } from '@/utils/stock'
+import { formatDateTime, validateStockCode } from '@/utils/stock'
+import { useThemeVars } from 'naive-ui'
+import type { CSSProperties } from 'vue'
 
-const router = useRouter()
 const brokerAccountStore = useBrokerAccountStore()
+const themeVars = useThemeVars()
 
 const stockCode = ref('')
 const inputError = ref('')
@@ -28,7 +30,7 @@ const executionModeOptions = [
 const historyItems = ref<HistoryItem[]>([])
 const historyTotal = ref(0)
 const historyPage = ref(1)
-const historyLimit = ref(20)
+const historyLimit = ref(5)
 const historyLoading = ref(false)
 
 const selectedQueryId = ref('')
@@ -40,6 +42,17 @@ const stageItems = ref<AgentStageItem[]>([])
 const stageSource = ref<'api' | 'mock' | 'derived'>('derived')
 const stageMissingApis = ref<string[]>([])
 const stageWarnings = ref<string[]>([])
+const recentReportModalVisible = ref(false)
+const recentReportModalLoading = ref(false)
+const recentReportModalTab = ref<'summary' | 'strategy' | 'stages' | 'news'>('summary')
+const recentReportModalQueryId = ref('')
+const recentReportModalReport = ref<AnalysisReport | null>(null)
+const recentReportModalNews = ref<NewsIntelItem[]>([])
+const recentReportModalStageItems = ref<AgentStageItem[]>([])
+const recentReportModalStageSource = ref<'api' | 'mock' | 'derived'>('derived')
+const recentReportModalStageMissingApis = ref<string[]>([])
+const recentReportModalStageWarnings = ref<string[]>([])
+const recentReportModalError = ref('')
 
 const tasksRefreshing = ref(false)
 const lastStreamWarnAt = ref(0)
@@ -56,64 +69,37 @@ const {
 } = useTaskQueueState()
 
 const simulationStatus = computed(() => brokerAccountStore.simulationStatus)
-const simulationStatusLoadFailed = computed(() => brokerAccountStore.simulationStatusLoadFailed)
-const simulationStatusError = computed(() => brokerAccountStore.simulationStatusError || brokerAccountStore.error)
 const needsInit = computed(() => !simulationStatus.value?.isBound)
 const needsVerify = computed(() => Boolean(simulationStatus.value?.isBound && !simulationStatus.value?.isVerified))
 
-const accountStatusType = computed<'error' | 'warning' | 'success'>(() => {
-  if (simulationStatusLoadFailed.value)
-    return 'error'
-  if (needsInit.value || needsVerify.value)
-    return 'warning'
-  return 'success'
-})
-
-const accountStatusTitle = computed(() => {
-  if (simulationStatusLoadFailed.value)
-    return '模拟盘状态读取失败'
-  if (needsInit.value)
-    return '未初始化模拟账户'
-  if (needsVerify.value)
-    return '模拟账户待校验'
-  return '模拟账户已就绪'
-})
-
-const accountStatusMessage = computed(() => {
-  if (simulationStatusLoadFailed.value)
-    return `后端或 Agent 服务异常，请先修复。${simulationStatusError.value || ''}`.trim()
-  if (needsInit.value)
-    return '请先完成模拟账户初始化，再提交分析任务。'
-  if (needsVerify.value)
-    return '请重新初始化并校验模拟账户，校验通过后才可自动下单。'
-  return `当前账户：${simulationStatus.value?.accountDisplayName || simulationStatus.value?.accountUid || '--'}，可直接进行分析。`
-})
-
-const bindActionLabel = computed(() => {
-  if (needsInit.value)
-    return '立即初始化'
-  if (needsVerify.value)
-    return '重新初始化并校验'
-  return '打开初始化弹窗'
-})
-
-const stageSourceType = computed<'success' | 'warning' | 'error'>(() => {
-  if (stageSource.value === 'api')
+function stageSourceTypeOf(source: 'api' | 'mock' | 'derived'): 'success' | 'warning' | 'error' {
+  if (source === 'api')
     return 'success'
-  if (stageSource.value === 'derived')
+  if (source === 'derived')
     return 'warning'
   return 'error'
-})
+}
 
-const stageSourceText = computed(() => {
-  if (stageSource.value === 'api')
+function stageSourceTextOf(source: 'api' | 'mock' | 'derived'): string {
+  if (source === 'api')
     return '真实接口数据'
-  if (stageSource.value === 'derived')
+  if (source === 'derived')
     return '派生数据'
   return '模拟数据'
+}
+
+const stageSourceType = computed<'success' | 'warning' | 'error'>(() => stageSourceTypeOf(stageSource.value))
+const stageSourceText = computed(() => stageSourceTextOf(stageSource.value))
+const recentReportModalStageSourceType = computed<'success' | 'warning' | 'error'>(() => stageSourceTypeOf(recentReportModalStageSource.value))
+const recentReportModalStageSourceText = computed(() => stageSourceTextOf(recentReportModalStageSource.value))
+const recentReportModalTitle = computed(() => {
+  if (!recentReportModalReport.value)
+    return '历史报告详情'
+  return `历史报告详情 · ${recentReportModalReport.value.meta.stockCode}`
 })
 
 const RECENT_REPORT_MATCH_WINDOW_MS = 30 * 60 * 1000
+const RECENT_RESULT_VISIBLE_LIMIT = 3
 
 interface RecentResultDisplayItem {
   taskId: string
@@ -128,7 +114,24 @@ interface RecentResultDisplayItem {
   unmatchedReason: string
 }
 
+interface HistoryResultDisplayItem {
+  queryId: string
+  stockCode: string
+  stockName: string
+  finishedAt: string
+  summaryText: string
+  statusTagType: 'success'
+}
+
+interface AnalysisOverviewCard {
+  key: string
+  label: string
+  value: number
+  type: 'success' | 'warning' | 'error' | 'info' | 'default'
+}
+
 let fallbackPollTimer: number | null = null
+let modalLoadSeq = 0
 
 function resolveTaskId(queryId: string): string | null {
   const hit = getTaskById(queryId)
@@ -231,8 +234,9 @@ function toTimestamp(value: string | null | undefined): number {
 
 const recentResultItems = computed<RecentResultDisplayItem[]>(() => {
   const items: RecentResultDisplayItem[] = []
+  const visibleTasks = filteredRecentTasks.value.slice(0, RECENT_RESULT_VISIBLE_LIMIT)
 
-  filteredRecentTasks.value.forEach((task) => {
+  visibleTasks.forEach((task) => {
     const finishedAt = task.completedAt || task.createdAt
 
     if (task.status === 'failed') {
@@ -294,11 +298,131 @@ const recentResultItems = computed<RecentResultDisplayItem[]>(() => {
   return items
 })
 
-function openRecentResult(item: RecentResultDisplayItem) {
+const analysisOverviewCards = computed<AnalysisOverviewCard[]>(() => {
+  const completedCount = filteredRecentTasks.value.filter(task => task.status === 'completed').length
+  const failedCount = filteredRecentTasks.value.filter(task => task.status === 'failed').length
+
+  return [
+    {
+      key: 'running',
+      label: '运行中任务',
+      value: runningTasks.value.length,
+      type: 'info',
+    },
+    {
+      key: 'completed',
+      label: '最近完成',
+      value: completedCount,
+      type: 'success',
+    },
+    {
+      key: 'failed',
+      label: '最近失败',
+      value: failedCount,
+      type: failedCount > 0 ? 'error' : 'default',
+    },
+    {
+      key: 'history',
+      label: '历史总数',
+      value: historyTotal.value,
+      type: 'warning',
+    },
+  ]
+})
+
+const historyResultItems = computed<HistoryResultDisplayItem[]>(() => {
+  return historyItems.value.map(item => ({
+    queryId: item.queryId,
+    stockCode: item.stockCode,
+    stockName: item.stockName || '--',
+    finishedAt: item.createdAt,
+    summaryText: item.operationAdvice || '--',
+    statusTagType: 'success',
+  }))
+})
+
+function overviewStatisticStyle(type: AnalysisOverviewCard['type']): CSSProperties | undefined {
+  const colorMap: Record<Exclude<AnalysisOverviewCard['type'], 'default'>, string> = {
+    info: themeVars.value.infoColor,
+    success: themeVars.value.successColor,
+    warning: themeVars.value.warningColor,
+    error: themeVars.value.errorColor,
+  }
+  if (type === 'default')
+    return undefined
+  return { '--n-value-text-color': colorMap[type] } as CSSProperties
+}
+
+interface ReportDetailBundle {
+  report: AnalysisReport
+  newsItems: NewsIntelItem[]
+  stageItems: AgentStageItem[]
+  stageSource: 'api' | 'mock' | 'derived'
+  stageMissingApis: string[]
+  stageWarnings: string[]
+}
+
+async function loadReportDetailBundle(queryId: string): Promise<ReportDetailBundle> {
+  const [report, news] = await Promise.all([
+    getHistoryDetail(queryId),
+    getHistoryNews(queryId, 20),
+  ])
+  const stageResult = await resolveAgentStages(resolveTaskId(queryId), report)
+  return {
+    report,
+    newsItems: news.items,
+    stageItems: stageResult.data.stages,
+    stageSource: stageResult.dataSource,
+    stageMissingApis: stageResult.missingApis,
+    stageWarnings: stageResult.warnings,
+  }
+}
+
+async function openReportModalByQueryId(queryId: string) {
+  const currentSeq = ++modalLoadSeq
+  recentReportModalVisible.value = true
+  recentReportModalLoading.value = true
+  recentReportModalTab.value = 'summary'
+  recentReportModalError.value = ''
+  recentReportModalQueryId.value = queryId
+
+  try {
+    const bundle = await loadReportDetailBundle(queryId)
+    if (currentSeq !== modalLoadSeq)
+      return
+    recentReportModalReport.value = bundle.report
+    recentReportModalNews.value = bundle.newsItems
+    recentReportModalStageItems.value = bundle.stageItems
+    recentReportModalStageSource.value = bundle.stageSource
+    recentReportModalStageMissingApis.value = bundle.stageMissingApis
+    recentReportModalStageWarnings.value = bundle.stageWarnings
+  }
+  catch {
+    if (currentSeq !== modalLoadSeq)
+      return
+    recentReportModalReport.value = null
+    recentReportModalNews.value = []
+    recentReportModalStageItems.value = []
+    recentReportModalStageSource.value = 'derived'
+    recentReportModalStageMissingApis.value = []
+    recentReportModalStageWarnings.value = []
+    recentReportModalError.value = '加载历史报告详情失败，请稍后重试'
+    window.$message.error('加载历史报告详情失败')
+  }
+  finally {
+    if (currentSeq === modalLoadSeq)
+      recentReportModalLoading.value = false
+  }
+}
+
+async function openRecentResult(item: RecentResultDisplayItem) {
   if (!item.queryId)
     return
-  detailTab.value = 'summary'
-  void loadReport(item.queryId)
+  await openReportModalByQueryId(item.queryId)
+}
+
+async function openHistoryResult(item: HistoryResultDisplayItem) {
+  await openReportModalByQueryId(item.queryId)
 }
 
 async function refreshHistory(resetPage = false) {
@@ -310,8 +434,6 @@ async function refreshHistory(resetPage = false) {
     const result = await getHistoryList({
       page: historyPage.value,
       limit: historyLimit.value,
-      startDate: getRecentStartDate(60),
-      endDate: toDateInputValue(new Date()),
     })
     historyItems.value = result.items
     historyTotal.value = result.total
@@ -324,35 +446,17 @@ async function refreshHistory(resetPage = false) {
   }
 }
 
-async function loadStages(taskId: string | null, report: AnalysisReport | null) {
-  stageWarnings.value = []
-  stageMissingApis.value = []
-
-  try {
-    const result = await resolveAgentStages(taskId, report)
-    stageItems.value = result.data.stages
-    stageSource.value = result.dataSource
-    stageWarnings.value = result.warnings
-    stageMissingApis.value = result.missingApis
-  }
-  catch {
-    stageItems.value = []
-    stageSource.value = 'derived'
-    stageWarnings.value = ['阶段信息解析失败']
-  }
-}
-
 async function loadReport(queryId: string) {
   selectedQueryId.value = queryId
   reportLoading.value = true
   try {
-    const [report, news] = await Promise.all([
-      getHistoryDetail(queryId),
-      getHistoryNews(queryId, 20),
-    ])
-    selectedReport.value = report
-    selectedNews.value = news.items
-    await loadStages(resolveTaskId(queryId), report)
+    const bundle = await loadReportDetailBundle(queryId)
+    selectedReport.value = bundle.report
+    selectedNews.value = bundle.newsItems
+    stageItems.value = bundle.stageItems
+    stageSource.value = bundle.stageSource
+    stageMissingApis.value = bundle.stageMissingApis
+    stageWarnings.value = bundle.stageWarnings
   }
   finally {
     reportLoading.value = false
@@ -361,25 +465,17 @@ async function loadReport(queryId: string) {
 
 function validateExecution(): boolean {
   executionError.value = ''
-  if (!simulationStatus.value?.isBound) {
+  if (needsInit.value) {
     executionError.value = '请先初始化模拟盘账户'
     brokerAccountStore.openBindModal()
     return false
   }
-  if (!simulationStatus.value.isVerified) {
+  if (needsVerify.value) {
     executionError.value = '模拟盘账户尚未校验，请前往交易账户中心完成初始化校验'
     brokerAccountStore.openBindModal()
     return false
   }
   return true
-}
-
-function openSimulationBindModal() {
-  brokerAccountStore.openBindModal()
-}
-
-async function retrySimulationStatus() {
-  await loadSimulationStatus()
 }
 
 function pretty(value: unknown): string {
@@ -485,8 +581,8 @@ onUnmounted(() => {
 <template>
   <n-space vertical :size="SPACING.lg">
     <n-grid :cols="24" :x-gap="GRID_GAP.outer" :y-gap="GRID_GAP.outer" responsive="screen">
-      <n-grid-item :span="24" :l-span="16">
-        <n-card title="提交分析任务" size="small">
+      <n-grid-item :span="24" :l-span="24">
+        <n-card title="提交分析任务" :size="CARD_DENSITY.default">
           <template #header-extra>
             <n-space :size="SPACING.sm" :wrap="true" align="center">
               <n-select v-model:value="executionMode" :options="executionModeOptions" style="width: 180px;" />
@@ -516,39 +612,26 @@ onUnmounted(() => {
           </n-space>
         </n-card>
       </n-grid-item>
+    </n-grid>
 
-      <n-grid-item :span="24" :l-span="8">
-        <n-card title="系统状态与入口" size="small">
-          <n-space vertical :size="SPACING.md">
-            <n-alert :type="accountStatusType" :show-icon="false">
-              {{ accountStatusTitle }}：{{ accountStatusMessage }}
-            </n-alert>
-
-            <n-space :size="SPACING.sm" :wrap="true">
-              <n-tag :type="isConnected ? 'success' : 'warning'">
-                {{ isConnected ? 'SSE 已连接' : 'SSE 重连中' }}
-              </n-tag>
-              <n-tag v-if="simulationStatus?.accountDisplayName || simulationStatus?.accountUid" type="info">
-                账户：{{ simulationStatus?.accountDisplayName || simulationStatus?.accountUid }}
-              </n-tag>
-            </n-space>
-
-            <n-space :size="SPACING.sm" :wrap="true">
-              <n-button v-if="simulationStatusLoadFailed" type="error" secondary @click="retrySimulationStatus">
-                重新检查
-              </n-button>
-              <n-button
-                v-if="needsInit || needsVerify || simulationStatusLoadFailed"
-                :type="simulationStatusLoadFailed ? 'error' : 'warning'"
-                secondary
-                @click="openSimulationBindModal"
-              >
-                {{ bindActionLabel }}
-              </n-button>
-              <n-button tertiary @click="router.push('/profile/trading')">
-                交易账户中心
-              </n-button>
-            </n-space>
+    <n-grid
+      :cols="DASHBOARD_LAYOUT.cols"
+      :x-gap="DASHBOARD_LAYOUT.outerGap"
+      :y-gap="DASHBOARD_LAYOUT.outerGap"
+      responsive="screen"
+      item-responsive
+    >
+      <n-grid-item
+        v-for="item in analysisOverviewCards"
+        :key="item.key"
+        span="24 s:12 m:6 l:6"
+      >
+        <n-card embedded :size="CARD_DENSITY.embedded">
+          <n-space vertical :size="SPACING.xs">
+            <n-text depth="3">
+              {{ item.label }}
+            </n-text>
+            <n-statistic :value="item.value" :precision="0" :style="overviewStatisticStyle(item.type)" />
           </n-space>
         </n-card>
       </n-grid-item>
@@ -557,7 +640,7 @@ onUnmounted(() => {
     <n-grid :cols="24" :x-gap="GRID_GAP.outer" :y-gap="GRID_GAP.outer" responsive="screen">
       <n-grid-item :span="24" :l-span="8">
         <n-space vertical :size="SPACING.lg">
-          <n-card title="运行中任务" size="small">
+          <n-card title="运行中任务" :size="CARD_DENSITY.default">
             <template #header-extra>
               <n-space align="center" :size="SPACING.sm">
                 <n-text depth="3">
@@ -582,7 +665,7 @@ onUnmounted(() => {
             </n-timeline>
           </n-card>
 
-          <n-card title="最近结果" size="small">
+          <n-card title="最近结果" :size="CARD_DENSITY.default">
             <template #header-extra>
               <n-radio-group v-model:value="recentFilter" size="small">
                 <n-radio-button value="all">
@@ -600,41 +683,40 @@ onUnmounted(() => {
             <n-empty v-if="recentResultItems.length === 0" description="暂无最近完成或失败任务" />
             <n-list v-else hoverable>
               <n-list-item v-for="item in recentResultItems" :key="item.taskId">
-                <n-card embedded size="small">
-                  <n-space vertical :size="SPACING.sm">
-                    <n-space justify="space-between" align="start">
-                      <n-space vertical :size="SPACING.xs">
-                        <n-space :size="SPACING.sm" align="center" :wrap="true">
-                          <n-text strong>
-                            {{ item.stockCode }}
-                          </n-text>
-                          <n-text depth="3">
-                            {{ item.stockName }}
-                          </n-text>
-                          <n-tag size="small" :type="item.statusTagType">
-                            {{ statusLabel(item.status) }}
-                          </n-tag>
-                        </n-space>
-                        <n-text depth="3">
-                          完成时间：{{ formatDateTime(item.finishedAt) }}
+                <n-card embedded :size="CARD_DENSITY.embedded">
+                  <n-space justify="space-between" align="center" :wrap="false" style="width: 100%;">
+                    <n-space vertical :size="SPACING.sm" style="min-width: 0; flex: 1;">
+                      <n-space :size="SPACING.sm" align="center" :wrap="true">
+                        <n-text strong>
+                          {{ item.stockCode }}
                         </n-text>
+                        <n-text depth="3">
+                          {{ item.stockName }}
+                        </n-text>
+                        <n-tag size="small" :type="item.statusTagType">
+                          {{ statusLabel(item.status) }}
+                        </n-tag>
                       </n-space>
-                      <n-button
-                        size="small"
-                        type="primary"
-                        tertiary
-                        :disabled="!item.canOpenReport"
-                        @click="openRecentResult(item)"
-                      >
-                        {{ item.canOpenReport ? '查看报告' : '未关联报告' }}
-                      </n-button>
+                      <n-text depth="3">
+                        完成时间：{{ formatDateTime(item.finishedAt) }}
+                      </n-text>
+                      <n-text :type="item.status === 'failed' ? 'error' : undefined">
+                        {{ item.summaryText }}
+                      </n-text>
+                      <n-text v-if="item.unmatchedReason" depth="3">
+                        {{ item.unmatchedReason }}
+                      </n-text>
                     </n-space>
-                    <n-text :type="item.status === 'failed' ? 'error' : undefined">
-                      {{ item.summaryText }}
-                    </n-text>
-                    <n-text v-if="item.unmatchedReason" depth="3">
-                      {{ item.unmatchedReason }}
-                    </n-text>
+                    <n-button
+                      size="small"
+                      type="primary"
+                      tertiary
+                      style="flex-shrink: 0;"
+                      :disabled="!item.canOpenReport"
+                      @click="openRecentResult(item)"
+                    >
+                      {{ item.canOpenReport ? '查看报告' : '未关联报告' }}
+                    </n-button>
                   </n-space>
                 </n-card>
               </n-list-item>
@@ -644,7 +726,7 @@ onUnmounted(() => {
       </n-grid-item>
 
       <n-grid-item :span="24" :l-span="16">
-        <n-card title="分析报告详情" size="small">
+        <n-card title="分析报告详情" :size="CARD_DENSITY.default">
           <template #header-extra>
             <n-popover trigger="hover">
               <template #trigger>
@@ -681,7 +763,7 @@ onUnmounted(() => {
                       </n-descriptions-item>
                     </n-descriptions>
 
-                    <n-card embedded size="small">
+                    <n-card embedded :size="CARD_DENSITY.embedded">
                       <n-space vertical :size="SPACING.sm">
                         <n-text depth="3">
                           分析摘要
@@ -769,14 +851,14 @@ onUnmounted(() => {
 
                           <n-grid :cols="24" :x-gap="GRID_GAP.inner" :y-gap="GRID_GAP.inner" responsive="screen">
                             <n-grid-item :span="24" :l-span="12">
-                              <n-card embedded title="输入摘要" size="small">
+                              <n-card embedded title="输入摘要" :size="CARD_DENSITY.embedded">
                                 <n-scrollbar style="max-height: 300px;">
                                   <pre style="white-space: pre-wrap; word-break: break-word;">{{ pretty(stage.input) }}</pre>
                                 </n-scrollbar>
                               </n-card>
                             </n-grid-item>
                             <n-grid-item :span="24" :l-span="12">
-                              <n-card embedded title="输出摘要" size="small">
+                              <n-card embedded title="输出摘要" :size="CARD_DENSITY.embedded">
                                 <n-scrollbar style="max-height: 300px;">
                                   <pre style="white-space: pre-wrap; word-break: break-word;">{{ pretty(stage.output) }}</pre>
                                 </n-scrollbar>
@@ -810,21 +892,47 @@ onUnmounted(() => {
       </n-grid-item>
     </n-grid>
 
-    <n-card title="历史分析记录" size="small">
+    <n-card title="历史分析记录" :size="CARD_DENSITY.default">
       <n-space vertical :size="SPACING.md">
-        <n-data-table
-          :loading="historyLoading"
-          :single-line="false"
-          size="small"
-          :columns="[
-            { title: '股票', key: 'stockCode' },
-            { title: '建议', key: 'operationAdvice', ellipsis: { tooltip: true } },
-            { title: '时间', key: 'createdAt', render: (row: any) => formatDateTime(row.createdAt) },
-          ]"
-          :data="historyItems"
-          :row-key="(row: any) => row.queryId"
-          :row-props="(row: any) => ({ onClick: () => loadReport(row.queryId) })"
-        />
+        <n-spin :show="historyLoading">
+          <n-empty v-if="historyResultItems.length === 0" description="暂无历史分析记录" />
+          <n-list v-else hoverable>
+            <n-list-item v-for="item in historyResultItems" :key="item.queryId">
+              <n-card embedded :size="CARD_DENSITY.embedded">
+                <n-space justify="space-between" align="center" :wrap="false" style="width: 100%;">
+                  <n-space vertical :size="SPACING.sm" style="min-width: 0; flex: 1;">
+                    <n-space :size="SPACING.sm" align="center" :wrap="true">
+                      <n-text strong>
+                        {{ item.stockCode }}
+                      </n-text>
+                      <n-text depth="3">
+                        {{ item.stockName }}
+                      </n-text>
+                      <n-tag size="small" :type="item.statusTagType">
+                        已完成
+                      </n-tag>
+                    </n-space>
+                    <n-text depth="3">
+                      完成时间：{{ formatDateTime(item.finishedAt) }}
+                    </n-text>
+                    <n-ellipsis :line-clamp="2" tooltip>
+                      {{ item.summaryText }}
+                    </n-ellipsis>
+                  </n-space>
+                  <n-button
+                    size="small"
+                    type="primary"
+                    tertiary
+                    style="flex-shrink: 0;"
+                    @click="openHistoryResult(item)"
+                  >
+                    查看报告
+                  </n-button>
+                </n-space>
+              </n-card>
+            </n-list-item>
+          </n-list>
+        </n-spin>
         <n-pagination
           :page="historyPage"
           :item-count="historyTotal"
@@ -833,5 +941,174 @@ onUnmounted(() => {
         />
       </n-space>
     </n-card>
+
+    <n-modal v-model:show="recentReportModalVisible" preset="card" :title="recentReportModalTitle" class="w-1200px max-w-95vw" closable>
+      <template #header-extra>
+        <n-popover trigger="hover">
+          <template #trigger>
+            <n-tag :type="recentReportModalStageSourceType">
+              {{ recentReportModalStageSourceText }}
+            </n-tag>
+          </template>
+          <n-space vertical :size="SPACING.sm">
+            <n-text>阶段来源：{{ recentReportModalStageSourceText }}</n-text>
+            <n-text v-if="recentReportModalStageMissingApis.length > 0" depth="3">
+              缺失接口：{{ recentReportModalStageMissingApis.join(', ') }}
+            </n-text>
+          </n-space>
+        </n-popover>
+      </template>
+
+      <n-spin :show="recentReportModalLoading">
+        <n-alert v-if="recentReportModalError" type="error" :show-icon="false">
+          {{ recentReportModalError }}
+        </n-alert>
+
+        <template v-else-if="recentReportModalReport">
+          <n-tabs v-model:value="recentReportModalTab" type="line" animated>
+            <n-tab-pane name="summary" tab="摘要">
+              <n-space vertical :size="SPACING.md">
+                <n-descriptions label-placement="left" bordered :column="2" size="small">
+                  <n-descriptions-item label="股票代码">
+                    {{ recentReportModalReport.meta.stockCode }}
+                  </n-descriptions-item>
+                  <n-descriptions-item label="股票名称">
+                    {{ recentReportModalReport.meta.stockName }}
+                  </n-descriptions-item>
+                  <n-descriptions-item label="报告时间">
+                    {{ formatDateTime(recentReportModalReport.meta.createdAt) }}
+                  </n-descriptions-item>
+                  <n-descriptions-item label="情绪得分">
+                    {{ recentReportModalReport.summary.sentimentScore }}
+                  </n-descriptions-item>
+                </n-descriptions>
+
+                <n-card embedded :size="CARD_DENSITY.embedded">
+                  <n-space vertical :size="SPACING.sm">
+                    <n-text depth="3">
+                      分析摘要
+                    </n-text>
+                    <n-text>{{ recentReportModalReport.summary.analysisSummary || '--' }}</n-text>
+                    <n-divider />
+                    <n-text depth="3">
+                      操作建议
+                    </n-text>
+                    <n-text>{{ recentReportModalReport.summary.operationAdvice || '--' }}</n-text>
+                    <n-divider />
+                    <n-text depth="3">
+                      趋势预测
+                    </n-text>
+                    <n-text>{{ recentReportModalReport.summary.trendPrediction || '--' }}</n-text>
+                  </n-space>
+                </n-card>
+              </n-space>
+            </n-tab-pane>
+
+            <n-tab-pane name="strategy" tab="策略点位">
+              <n-descriptions bordered :column="2" size="small" label-placement="left">
+                <n-descriptions-item label="理想买点">
+                  <n-tag v-if="recentReportModalReport.strategy?.idealBuy" type="success">
+                    {{ recentReportModalReport.strategy.idealBuy }}
+                  </n-tag>
+                  <n-text v-else depth="3">
+                    --
+                  </n-text>
+                </n-descriptions-item>
+                <n-descriptions-item label="次级买点">
+                  <n-tag v-if="recentReportModalReport.strategy?.secondaryBuy" type="info">
+                    {{ recentReportModalReport.strategy.secondaryBuy }}
+                  </n-tag>
+                  <n-text v-else depth="3">
+                    --
+                  </n-text>
+                </n-descriptions-item>
+                <n-descriptions-item label="止损位">
+                  <n-tag v-if="recentReportModalReport.strategy?.stopLoss" type="error">
+                    {{ recentReportModalReport.strategy.stopLoss }}
+                  </n-tag>
+                  <n-text v-else depth="3">
+                    --
+                  </n-text>
+                </n-descriptions-item>
+                <n-descriptions-item label="止盈位">
+                  <n-tag v-if="recentReportModalReport.strategy?.takeProfit" type="success">
+                    {{ recentReportModalReport.strategy.takeProfit }}
+                  </n-tag>
+                  <n-text v-else depth="3">
+                    --
+                  </n-text>
+                </n-descriptions-item>
+              </n-descriptions>
+            </n-tab-pane>
+
+            <n-tab-pane name="stages" tab="四阶段详情">
+              <n-space vertical :size="SPACING.sm">
+                <n-alert v-for="item in recentReportModalStageWarnings" :key="item" type="warning" :show-icon="false">
+                  {{ item }}
+                </n-alert>
+
+                <n-empty v-if="recentReportModalStageItems.length === 0" description="暂无阶段数据" />
+                <n-collapse v-else arrow-placement="right" accordion>
+                  <n-collapse-item v-for="stage in recentReportModalStageItems" :key="stage.code" :name="stage.code" :title="stage.title">
+                    <template #header-extra>
+                      <n-tag size="small" :type="stageStatusType(stage.status)">
+                        {{ stageStatusText(stage.status) }}
+                      </n-tag>
+                    </template>
+
+                    <n-space vertical :size="SPACING.md">
+                      <n-descriptions bordered :column="1" size="small" label-placement="left">
+                        <n-descriptions-item label="阶段摘要">
+                          {{ stage.summary || '--' }}
+                        </n-descriptions-item>
+                        <n-descriptions-item label="耗时">
+                          {{ stage.durationMs != null ? `${stage.durationMs}ms` : '--' }}
+                        </n-descriptions-item>
+                        <n-descriptions-item v-if="stage.errorMessage" label="错误信息">
+                          {{ stage.errorMessage }}
+                        </n-descriptions-item>
+                      </n-descriptions>
+
+                      <n-grid :cols="24" :x-gap="GRID_GAP.inner" :y-gap="GRID_GAP.inner" responsive="screen">
+                        <n-grid-item :span="24" :l-span="12">
+                          <n-card embedded title="输入摘要" :size="CARD_DENSITY.embedded">
+                            <n-scrollbar style="max-height: 300px;">
+                              <pre style="white-space: pre-wrap; word-break: break-word;">{{ pretty(stage.input) }}</pre>
+                            </n-scrollbar>
+                          </n-card>
+                        </n-grid-item>
+                        <n-grid-item :span="24" :l-span="12">
+                          <n-card embedded title="输出摘要" :size="CARD_DENSITY.embedded">
+                            <n-scrollbar style="max-height: 300px;">
+                              <pre style="white-space: pre-wrap; word-break: break-word;">{{ pretty(stage.output) }}</pre>
+                            </n-scrollbar>
+                          </n-card>
+                        </n-grid-item>
+                      </n-grid>
+                    </n-space>
+                  </n-collapse-item>
+                </n-collapse>
+              </n-space>
+            </n-tab-pane>
+
+            <n-tab-pane name="news" tab="新闻情报">
+              <n-empty v-if="recentReportModalNews.length === 0" description="暂无新闻" />
+              <n-list v-else hoverable>
+                <n-list-item v-for="news in recentReportModalNews" :key="news.url">
+                  <n-space vertical :size="SPACING.sm">
+                    <a :href="news.url" target="_blank" rel="noreferrer">{{ news.title }}</a>
+                    <n-text depth="3">
+                      {{ news.snippet }}
+                    </n-text>
+                  </n-space>
+                </n-list-item>
+              </n-list>
+            </n-tab-pane>
+          </n-tabs>
+        </template>
+
+        <n-empty v-else description="暂无可展示的历史报告" />
+      </n-spin>
+    </n-modal>
   </n-space>
 </template>

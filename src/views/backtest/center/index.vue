@@ -1,571 +1,656 @@
 <script setup lang="ts">
+import { NButton, NTag } from 'naive-ui'
+import type { LineSeriesOption } from 'echarts/charts'
 import { useEcharts } from '@/hooks/useEcharts'
 import type { ECOption } from '@/hooks/useEcharts'
-import { CHART_HEIGHT, GRID_GAP, SPACING } from '@/constants/design-tokens'
-import { compareStrategies, fetchBacktestBundle, runBacktestWithRefresh } from '@/services/backtest-service'
-import type { BacktestResultItem } from '@/types/backtest'
-import type { StrategyCompareItem } from '@/types/backtest-analytics'
-import { formatPct } from '@/utils/stock'
-
-type HeroStatusType = 'error' | 'warning' | 'success'
+import { CARD_DENSITY, CHART_HEIGHT, DASHBOARD_LAYOUT, GRID_GAP, SPACING } from '@/constants/design-tokens'
+import {
+  fetchStrategyRunDetail,
+  fetchStrategyRunHistory,
+  runStrategyRangeBacktest,
+} from '@/services/backtest-strategy-service'
+import {
+  STRATEGY_RANGE_CODES,
+  STRATEGY_RANGE_NAME_MAP,
+} from '@/types/backtest-strategy'
+import type {
+  StrategyRangeCode,
+  StrategyRangeRunResponse,
+  StrategyRunHistoryItem,
+  StrategyTradeItem,
+} from '@/types/backtest-strategy'
+import { h } from 'vue'
 
 const code = ref('')
-const evalWindowDays = ref<number | null>(null)
-const force = ref(false)
-const isMobile = useMediaQuery('(max-width: 1024px)')
+const dateRange = ref<[number, number] | null>(null)
+const strategyCodes = ref<StrategyRangeCode[]>([...STRATEGY_RANGE_CODES])
+const initialCapital = ref<number | null>(100000)
+const commissionRate = ref<number | null>(0.0003)
+const slippageBps = ref<number | null>(2)
 
 const running = ref(false)
-const loading = ref(false)
-const loadingPerf = ref(false)
-const comparing = ref(false)
-
-const runSummary = ref<{ processed: number, saved: number, completed: number, insufficient: number, errors: number } | null>(null)
+const loadingDetail = ref(false)
+const loadingHistory = ref(false)
 const runError = ref('')
 
-const sourceTag = ref<'api' | 'mock' | 'derived'>('api')
-const missingApis = ref<string[]>([])
-const warnings = ref<string[]>([])
+const currentRun = ref<StrategyRangeRunResponse | null>(null)
+const historyRows = ref<StrategyRunHistoryItem[]>([])
+const historyTotal = ref(0)
+const historyPage = ref(1)
+const historyPageSize = ref(8)
+const selectedRunGroupId = ref<number | null>(null)
 
-const results = ref<BacktestResultItem[]>([])
-const total = ref(0)
-const page = ref(1)
-const pageSize = ref(20)
-
-const overall = ref<any>(null)
-const curves = ref<any[]>([])
-const distribution = ref({ longCount: 0, cashCount: 0, winCount: 0, lossCount: 0, neutralCount: 0 })
-const maxDrawdownPct = ref<number | null>(null)
-
-const compareWindows = ref<number[]>([5, 10, 20])
-const compareRows = ref<StrategyCompareItem[]>([])
-const compareError = ref('')
-
-const distributionOptions = ref<ECOption>({})
 const equityOptions = ref<ECOption>({})
-const drawdownOptions = ref<ECOption>({})
 
-function metric(value?: number | null, digits = 1) {
-  if (value == null)
-    return '--'
-  return `${value.toFixed(digits)}%`
+const strategyOptions = STRATEGY_RANGE_CODES.map(item => ({
+  code: item,
+  label: STRATEGY_RANGE_NAME_MAP[item],
+}))
+
+function toDayText(value: number): string {
+  const day = new Date(value)
+  const year = day.getFullYear()
+  const month = String(day.getMonth() + 1).padStart(2, '0')
+  const date = String(day.getDate()).padStart(2, '0')
+  return `${year}-${month}-${date}`
 }
 
-const runStatusTag = computed<{ label: string, type: HeroStatusType }>(() => {
-  if (running.value)
-    return { label: '回测执行中', type: 'warning' }
-  if (runError.value)
-    return { label: '最近执行失败', type: 'error' }
-  return { label: '就绪', type: 'success' }
-})
+function metric(value: unknown, digits = 2): string {
+  const number = Number(value)
+  if (!Number.isFinite(number))
+    return '--'
+  return `${number.toFixed(digits)}%`
+}
 
-const sourceType = computed<'success' | 'warning' | 'error'>(() => {
-  if (sourceTag.value === 'api')
+function money(value: unknown, digits = 2): string {
+  const number = Number(value)
+  if (!Number.isFinite(number))
+    return '--'
+  return number.toFixed(digits)
+}
+
+function ratioTagType(value: unknown): 'success' | 'warning' | 'error' | 'default' {
+  const number = Number(value)
+  if (!Number.isFinite(number))
+    return 'default'
+  if (number >= 60)
     return 'success'
-  if (sourceTag.value === 'derived')
+  if (number >= 40)
     return 'warning'
   return 'error'
-})
-
-const sourceText = computed(() => {
-  if (sourceTag.value === 'api')
-    return '真实接口数据'
-  if (sourceTag.value === 'derived')
-    return '派生数据'
-  return '模拟数据'
-})
-
-const kpiStats = computed(() => {
-  return [
-    { key: 'accuracy', label: '方向准确率', value: overall.value?.directionAccuracyPct ?? null, suffix: '%' },
-    { key: 'winRate', label: '胜率', value: overall.value?.winRatePct ?? null, suffix: '%' },
-    { key: 'avgSim', label: '平均模拟收益', value: overall.value?.avgSimulatedReturnPct ?? null, suffix: '%' },
-    { key: 'avgStock', label: '平均标的收益', value: overall.value?.avgStockReturnPct ?? null, suffix: '%' },
-    { key: 'drawdown', label: '最大回撤', value: maxDrawdownPct.value, suffix: '%' },
-    { key: 'completed', label: '完成样本', value: overall.value?.completedCount ?? null, suffix: '' },
-  ]
-})
-
-const compactChartStyle = computed(() => {
-  return {
-    width: '100%',
-    height: `${isMobile.value ? CHART_HEIGHT.compactMobile : CHART_HEIGHT.compactDesktop}px`,
-  }
-})
-
-function rebuildDistribution() {
-  distributionOptions.value = {
-    tooltip: { trigger: 'item' },
-    legend: { bottom: 0 },
-    series: [
-      {
-        name: '交易分布',
-        type: 'pie',
-        radius: ['40%', '70%'],
-        data: [
-          { name: 'Long', value: distribution.value.longCount },
-          { name: 'Cash', value: distribution.value.cashCount },
-          { name: 'Win', value: distribution.value.winCount },
-          { name: 'Loss', value: distribution.value.lossCount },
-          { name: 'Neutral', value: distribution.value.neutralCount },
-        ],
-      },
-    ],
-  }
 }
 
-function rebuildEquity() {
+function returnTagType(value: unknown): 'success' | 'warning' | 'error' | 'default' {
+  const number = Number(value)
+  if (!Number.isFinite(number))
+    return 'default'
+  if (number > 0)
+    return 'success'
+  if (number < 0)
+    return 'error'
+  return 'warning'
+}
+
+function drawdownTagType(value: unknown): 'success' | 'warning' | 'error' | 'default' {
+  const number = Number(value)
+  if (!Number.isFinite(number))
+    return 'default'
+  const absValue = Math.abs(number)
+  if (absValue <= 10)
+    return 'success'
+  if (absValue <= 20)
+    return 'warning'
+  return 'error'
+}
+
+function noTradeReasonText(reason: string): string {
+  if (reason === 'no_entry_signal')
+    return '无入场信号'
+  if (reason === 'entry_rejected_margin')
+    return '入场被资金约束拒绝'
+  if (reason === 'no_exit_signal')
+    return '无离场信号（窗口内）'
+  if (reason === 'no_completed_trade')
+    return '未形成完整交易'
+  return ''
+}
+
+function formatNoTradeReason(row: any): string {
+  const totalTrades = Number(row.totalTrades)
+  if (Number.isFinite(totalTrades) && totalTrades > 0)
+    return '--'
+
+  const reason = String(row.noTradeReason || '').trim()
+  const detail = String(row.noTradeReasonDetail || '').trim()
+  const text = noTradeReasonText(reason) || '--'
+  if (text === '--')
+    return text
+  return detail ? `${text} (${detail})` : text
+}
+
+function normalizeStrategySelection(values: StrategyRangeCode[]): StrategyRangeCode[] {
+  const selected = Array.from(new Set(values)).filter((item): item is StrategyRangeCode => STRATEGY_RANGE_CODES.includes(item))
+  return selected.length > 0 ? selected : [...STRATEGY_RANGE_CODES]
+}
+
+function rebuildEquityChart() {
+  const run = currentRun.value
+  if (!run || run.items.length === 0 || !run.items.some(item => item.equity.length > 0)) {
+    equityOptions.value = {}
+    return
+  }
+
+  const labels = Array.from(new Set(run.items.flatMap(item => item.equity.map(point => point.tradeDate || ''))))
+    .filter(item => item.length > 0)
+    .sort((a, b) => a.localeCompare(b))
+  if (labels.length === 0) {
+    equityOptions.value = {}
+    return
+  }
+
+  const series: LineSeriesOption[] = run.items.map((item) => {
+    const map = new Map(item.equity.map(point => [point.tradeDate || '', Number(point.equity)]))
+    const data = labels.map((label) => {
+      const value = map.get(label)
+      return Number.isFinite(value) ? value : null
+    })
+    return {
+      name: item.strategyName,
+      type: 'line',
+      smooth: true,
+      showSymbol: false,
+      connectNulls: true,
+      data,
+    }
+  })
+
+  const benchmarkMap = new Map<string, number>()
+  run.items.forEach((item) => {
+    item.equity.forEach((point) => {
+      if (point.tradeDate && Number.isFinite(Number(point.benchmarkEquity)) && !benchmarkMap.has(point.tradeDate))
+        benchmarkMap.set(point.tradeDate, Number(point.benchmarkEquity))
+    })
+  })
+
+  if (benchmarkMap.size > 0) {
+    series.push({
+      name: 'Benchmark',
+      type: 'line',
+      smooth: true,
+      showSymbol: false,
+      lineStyle: { type: 'dashed' },
+      connectNulls: true,
+      data: labels.map(label => (benchmarkMap.has(label) ? benchmarkMap.get(label) ?? null : null)),
+    })
+  }
+
   equityOptions.value = {
     tooltip: { trigger: 'axis' },
-    legend: { data: ['策略收益', '标的收益'] },
+    legend: { top: 0 },
     xAxis: {
       type: 'category',
-      data: curves.value.map(item => item.label),
+      data: labels,
       boundaryGap: false,
     },
-    yAxis: { type: 'value', name: '收益(%)' },
-    series: [
-      {
-        name: '策略收益',
-        type: 'line',
-        showSymbol: false,
-        smooth: true,
-        data: curves.value.map(item => item.strategyReturnPct),
-      },
-      {
-        name: '标的收益',
-        type: 'line',
-        showSymbol: false,
-        smooth: true,
-        data: curves.value.map(item => item.benchmarkReturnPct),
-      },
-    ],
-    grid: { left: 48, right: 20, top: 40, bottom: 28 },
-  }
-}
-
-function rebuildDrawdown() {
-  drawdownOptions.value = {
-    tooltip: { trigger: 'axis' },
-    xAxis: {
-      type: 'category',
-      data: curves.value.map(item => item.label),
-      boundaryGap: false,
+    yAxis: {
+      type: 'value',
+      name: 'Equity',
+      scale: true,
     },
-    yAxis: { type: 'value', name: '回撤(%)' },
-    series: [
-      {
-        name: '回撤',
-        type: 'line',
-        showSymbol: false,
-        smooth: true,
-        areaStyle: { opacity: 0.15 },
-        data: curves.value.map(item => item.drawdownPct),
-      },
-    ],
-    grid: { left: 48, right: 20, top: 24, bottom: 28 },
+    grid: { left: 50, right: 20, top: 36, bottom: 28 },
+    series,
   }
 }
 
-async function loadBundle() {
-  loading.value = true
-  loadingPerf.value = true
-  warnings.value = []
-  missingApis.value = []
+const hasEquityData = computed(() => {
+  const run = currentRun.value
+  if (!run)
+    return false
+  return run.items.some(item => item.equity.length > 0)
+})
 
-  try {
-    const bundle = await fetchBacktestBundle({
-      code: code.value.trim() || undefined,
-      evalWindowDays: evalWindowDays.value ?? undefined,
-      page: page.value,
-      limit: pageSize.value,
+const metricsRows = computed(() => {
+  const run = currentRun.value
+  if (!run)
+    return []
+  return run.items.map((item) => {
+    const metrics = item.metrics || {}
+    return {
+      strategyCode: item.strategyCode,
+      strategyName: item.strategyName,
+      totalReturnPct: Number(metrics.totalReturnPct ?? metrics.total_return_pct),
+      benchmarkReturnPct: Number(metrics.benchmarkReturnPct ?? metrics.benchmark_return_pct),
+      excessReturnPct: Number(metrics.excessReturnPct ?? metrics.excess_return_pct),
+      maxDrawdownPct: Number(metrics.maxDrawdownPct ?? metrics.max_drawdown_pct),
+      totalTrades: Number(metrics.totalTrades ?? metrics.total_trades),
+      winRatePct: Number(metrics.winRatePct ?? metrics.win_rate_pct),
+      sharpeRatio: Number(metrics.sharpeRatio ?? metrics.sharpe_ratio),
+      entrySignalCount: Number(metrics.entrySignalCount ?? metrics.entry_signal_count ?? 0),
+      exitSignalCount: Number(metrics.exitSignalCount ?? metrics.exit_signal_count ?? 0),
+      noTradeReason: String(metrics.noTradeReason ?? metrics.no_trade_reason ?? ''),
+      noTradeReasonDetail: String(metrics.noTradeReasonDetail ?? metrics.no_trade_reason_detail ?? ''),
+    }
+  })
+})
+
+const runNoTradeSummary = computed(() => {
+  const run = currentRun.value
+  if (!run)
+    return ''
+
+  const messages = run.items.map((item) => {
+    const metrics = item.metrics || {}
+    const totalTrades = Number(metrics.totalTrades ?? metrics.total_trades)
+    if (Number.isFinite(totalTrades) && totalTrades > 0)
+      return ''
+
+    const reason = String(metrics.noTradeReason ?? metrics.no_trade_reason ?? '').trim()
+    const detail = String(metrics.noTradeReasonDetail ?? metrics.no_trade_reason_detail ?? '').trim()
+    const text = noTradeReasonText(reason)
+    if (!text)
+      return ''
+    return `${item.strategyName}: ${detail ? `${text} (${detail})` : text}`
+  }).filter(item => item.length > 0)
+
+  return messages.join('；')
+})
+
+const tradeRows = computed(() => {
+  const run = currentRun.value
+  if (!run)
+    return []
+
+  const rows: Array<StrategyTradeItem & { strategyName: string }> = []
+  run.items.forEach((item) => {
+    item.trades.forEach((trade) => {
+      rows.push({
+        strategyName: item.strategyName,
+        ...trade,
+      })
     })
+  })
 
-    sourceTag.value = bundle.dataSource
-    missingApis.value = bundle.missingApis
-    warnings.value = bundle.warnings
+  rows.sort((a, b) => String(a.entryDate || '').localeCompare(String(b.entryDate || '')))
+  return rows
+})
 
-    results.value = bundle.data.results
-    total.value = bundle.data.total
-    overall.value = bundle.data.overall
-    curves.value = bundle.data.analytics.curves
-    distribution.value = bundle.data.analytics.distribution
-    maxDrawdownPct.value = bundle.data.analytics.maxDrawdownPct
-
-    rebuildDistribution()
-    rebuildEquity()
-    rebuildDrawdown()
-  }
-  finally {
-    loading.value = false
-    loadingPerf.value = false
-  }
-}
-
-async function run() {
-  runError.value = ''
-  running.value = true
+async function loadHistory(page = historyPage.value) {
+  loadingHistory.value = true
   try {
-    const result = await runBacktestWithRefresh({
-      code: code.value.trim() || undefined,
-      force: force.value,
-      evalWindowDays: evalWindowDays.value ?? undefined,
+    const data = await fetchStrategyRunHistory({
+      page,
+      limit: historyPageSize.value,
     })
-    runSummary.value = result.data.summary
-    await loadBundle()
-    window.$message.success('回测执行完成')
+    historyRows.value = data.items
+    historyTotal.value = data.total
+    historyPage.value = data.page
   }
   catch (error: unknown) {
-    runError.value = (error as { response?: { data?: { message?: string } } })?.response?.data?.message || '回测执行失败'
+    const message = (error as { response?: { data?: { message?: string } } })?.response?.data?.message
+      || '加载历史策略回测失败（回测存储未就绪或服务异常）'
+    runError.value = message
+    historyRows.value = []
+    historyTotal.value = 0
+    window.$message.error(message)
+  }
+  finally {
+    loadingHistory.value = false
+  }
+}
+
+async function loadRunDetail(runGroupId: number) {
+  loadingDetail.value = true
+  runError.value = ''
+  try {
+    const detail = await fetchStrategyRunDetail(runGroupId)
+    currentRun.value = detail
+    selectedRunGroupId.value = detail.runGroupId
+    rebuildEquityChart()
+  }
+  catch (error: unknown) {
+    runError.value = (error as { response?: { data?: { message?: string } } })?.response?.data?.message || '加载回测详情失败'
+  }
+  finally {
+    loadingDetail.value = false
+  }
+}
+
+async function runBacktest() {
+  runError.value = ''
+  const normalizedCode = code.value.trim()
+  if (!normalizedCode) {
+    window.$message.warning('请输入股票代码')
+    return
+  }
+  if (!dateRange.value || dateRange.value.length !== 2) {
+    window.$message.warning('请选择日期区间')
+    return
+  }
+
+  const selectedStrategies = normalizeStrategySelection(strategyCodes.value)
+  if (selectedStrategies.length === 0) {
+    window.$message.warning('请至少选择一个策略')
+    return
+  }
+
+  running.value = true
+  try {
+    const response = await runStrategyRangeBacktest({
+      code: normalizedCode,
+      startDate: toDayText(dateRange.value[0]),
+      endDate: toDayText(dateRange.value[1]),
+      strategyCodes: selectedStrategies,
+      initialCapital: initialCapital.value ?? undefined,
+      commissionRate: commissionRate.value ?? undefined,
+      slippageBps: slippageBps.value ?? undefined,
+    })
+
+    currentRun.value = response.data
+    selectedRunGroupId.value = response.data.runGroupId
+    rebuildEquityChart()
+    await loadHistory(1)
+
+    const noTradeMessages = response.data.items.map((item) => {
+      const metrics = item.metrics || {}
+      const totalTrades = Number(metrics.totalTrades ?? metrics.total_trades)
+      if (Number.isFinite(totalTrades) && totalTrades > 0)
+        return ''
+
+      const reason = String(metrics.noTradeReason ?? metrics.no_trade_reason ?? '').trim()
+      const detail = String(metrics.noTradeReasonDetail ?? metrics.no_trade_reason_detail ?? '').trim()
+      const text = noTradeReasonText(reason)
+      if (!text)
+        return ''
+      return `${item.strategyName}: ${detail ? `${text} (${detail})` : text}`
+    }).filter(item => item.length > 0)
+
+    if (noTradeMessages.length > 0)
+      window.$message.warning(`策略回测完成：当前区间无成交信号。${noTradeMessages.join('；')}`)
+    else
+      window.$message.success('策略回测完成')
+  }
+  catch (error: unknown) {
+    runError.value = (error as { response?: { data?: { message?: string } } })?.response?.data?.message || '策略回测失败'
   }
   finally {
     running.value = false
   }
 }
 
-async function runCompare() {
-  compareError.value = ''
-  comparing.value = true
-  try {
-    const windows = [...new Set(compareWindows.value)]
-      .map(item => Number(item))
-      .filter(item => Number.isFinite(item) && item > 0)
-
-    if (windows.length === 0) {
-      compareError.value = '请至少保留一个策略窗口'
-      return
-    }
-
-    const result = await compareStrategies(code.value.trim() || undefined, windows)
-    compareRows.value = result.data
-
-    if (result.warnings.length > 0)
-      window.$message.warning(result.warnings[0])
-  }
-  catch (error: unknown) {
-    compareError.value = (error as { response?: { data?: { message?: string } } })?.response?.data?.message || '策略对比失败'
-  }
-  finally {
-    comparing.value = false
-  }
-}
-
-function buildReportMarkdown() {
-  const lines: string[] = []
-  lines.push('# 回测报告')
-  lines.push('')
-  lines.push(`- 代码: ${code.value || '全部'}`)
-  lines.push(`- 评估窗口: ${evalWindowDays.value ?? '--'}`)
-  lines.push(`- 数据来源: ${sourceTag.value}`)
-  lines.push(`- 最大回撤: ${metric(maxDrawdownPct.value, 2)}`)
-  lines.push('')
-  lines.push('## 总体绩效')
-  lines.push(`- 样本数: ${overall.value?.completedCount ?? 0}/${overall.value?.totalEvaluations ?? 0}`)
-  lines.push(`- 方向准确率: ${metric(overall.value?.directionAccuracyPct, 2)}`)
-  lines.push(`- 胜率: ${metric(overall.value?.winRatePct, 2)}`)
-  lines.push(`- 平均模拟收益: ${metric(overall.value?.avgSimulatedReturnPct, 2)}`)
-  lines.push('')
-  lines.push('## 多策略对比')
-  lines.push('| 窗口 | 总样本 | 完成样本 | 方向准确率 | 胜率 | 平均模拟收益 | 最大回撤 |')
-  lines.push('|---|---:|---:|---:|---:|---:|---:|')
-  compareRows.value.forEach((item) => {
-    lines.push(`| ${item.evalWindowDays} | ${item.totalEvaluations} | ${item.completedCount} | ${metric(item.directionAccuracyPct, 2)} | ${metric(item.winRatePct, 2)} | ${metric(item.avgSimulatedReturnPct, 2)} | ${metric(item.maxDrawdownPct, 2)} |`)
-  })
-  lines.push('')
-  lines.push('## 结果记录')
-  lines.push(`- 当前页记录数: ${results.value.length}`)
-  return lines.join('\n')
-}
-
-function downloadText(filename: string, text: string, type = 'text/plain') {
-  const blob = new Blob([text], { type: `${type};charset=utf-8` })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-function exportReport() {
-  const ts = new Date()
-  const name = `${ts.getFullYear()}${String(ts.getMonth() + 1).padStart(2, '0')}${String(ts.getDate()).padStart(2, '0')}-${String(ts.getHours()).padStart(2, '0')}${String(ts.getMinutes()).padStart(2, '0')}${String(ts.getSeconds()).padStart(2, '0')}`
-
-  const md = buildReportMarkdown()
-  const json = JSON.stringify({
-    filters: {
-      code: code.value || null,
-      evalWindowDays: evalWindowDays.value,
+const metricsColumns = [
+  { title: '策略', key: 'strategyName' },
+  {
+    title: '总收益',
+    key: 'totalReturnPct',
+    render: (row: any) => h(NTag, { size: 'small', type: returnTagType(row.totalReturnPct) }, { default: () => metric(row.totalReturnPct, 2) }),
+  },
+  {
+    title: '基准收益',
+    key: 'benchmarkReturnPct',
+    render: (row: any) => metric(row.benchmarkReturnPct, 2),
+  },
+  {
+    title: '超额收益',
+    key: 'excessReturnPct',
+    render: (row: any) => h(NTag, { size: 'small', type: returnTagType(row.excessReturnPct) }, { default: () => metric(row.excessReturnPct, 2) }),
+  },
+  {
+    title: '最大回撤',
+    key: 'maxDrawdownPct',
+    render: (row: any) => h(NTag, { size: 'small', type: drawdownTagType(row.maxDrawdownPct) }, { default: () => metric(Math.abs(Number(row.maxDrawdownPct || 0)), 2) }),
+  },
+  {
+    title: '交易数',
+    key: 'totalTrades',
+  },
+  {
+    title: '无交易原因',
+    key: 'noTradeReason',
+    render: (row: any) => formatNoTradeReason(row),
+  },
+  {
+    title: '胜率',
+    key: 'winRatePct',
+    render: (row: any) => h(NTag, { size: 'small', type: ratioTagType(row.winRatePct) }, { default: () => metric(row.winRatePct, 2) }),
+  },
+  {
+    title: 'Sharpe',
+    key: 'sharpeRatio',
+    render: (row: any) => {
+      const value = Number(row.sharpeRatio)
+      return Number.isFinite(value) ? value.toFixed(3) : '--'
     },
-    sourceTag: sourceTag.value,
-    warnings: warnings.value,
-    summary: overall.value,
-    maxDrawdownPct: maxDrawdownPct.value,
-    compareRows: compareRows.value,
-    results: results.value,
-  }, null, 2)
+  },
+]
 
-  downloadText(`backtest-report-${name}.md`, md, 'text/markdown')
-  downloadText(`backtest-report-${name}.json`, json, 'application/json')
-}
+const tradeColumns = [
+  { title: '策略', key: 'strategyName' },
+  { title: '开仓日', key: 'entryDate' },
+  { title: '平仓日', key: 'exitDate' },
+  {
+    title: '开仓价',
+    key: 'entryPrice',
+    render: (row: any) => money(row.entryPrice, 4),
+  },
+  {
+    title: '平仓价',
+    key: 'exitPrice',
+    render: (row: any) => money(row.exitPrice, 4),
+  },
+  { title: '数量', key: 'qty' },
+  {
+    title: '净收益',
+    key: 'netReturnPct',
+    render: (row: any) => h(NTag, { size: 'small', type: returnTagType(row.netReturnPct) }, { default: () => metric(row.netReturnPct, 2) }),
+  },
+  {
+    title: '手续费',
+    key: 'fees',
+    render: (row: any) => money(row.fees, 6),
+  },
+  { title: '离场原因', key: 'exitReason' },
+]
 
-const resultColumns = [
+const historyColumns = [
+  { title: 'Run Group', key: 'runGroupId' },
   { title: '代码', key: 'code' },
-  { title: '分析日期', key: 'analysisDate' },
-  { title: '建议', key: 'operationAdvice', ellipsis: { tooltip: true } },
   {
-    title: '收益率',
-    key: 'simulatedReturnPct',
-    render: (row: BacktestResultItem) => formatPct(row.simulatedReturnPct),
+    title: '请求区间',
+    key: 'requestedRange',
+    render: (row: StrategyRunHistoryItem) => `${row.requestedRange.startDate || '--'} ~ ${row.requestedRange.endDate || '--'}`,
   },
   {
-    title: '结果',
-    key: 'outcome',
-    render: (row: BacktestResultItem) => row.outcome || '--',
+    title: '有效区间',
+    key: 'effectiveRange',
+    render: (row: StrategyRunHistoryItem) => `${row.effectiveRange.startDate || '--'} ~ ${row.effectiveRange.endDate || '--'}`,
   },
   {
-    title: '状态',
-    key: 'evalStatus',
-    render: (row: BacktestResultItem) => row.evalStatus,
+    title: '策略',
+    key: 'strategies',
+    render: (row: StrategyRunHistoryItem) => row.strategies.map(item => item.strategyName).join(', '),
+  },
+  {
+    title: '创建时间',
+    key: 'createdAt',
+  },
+  {
+    title: '操作',
+    key: 'actions',
+    render: (row: StrategyRunHistoryItem) => h(
+      NButton,
+      {
+        size: 'small',
+        tertiary: true,
+        onClick: () => loadRunDetail(row.runGroupId),
+      },
+      { default: () => '查看' },
+    ),
   },
 ]
 
-const compareColumns = [
-  { title: '窗口', key: 'evalWindowDays' },
-  { title: '总样本', key: 'totalEvaluations' },
-  { title: '完成样本', key: 'completedCount' },
-  { title: '方向准确率', key: 'directionAccuracyPct', render: (row: StrategyCompareItem) => metric(row.directionAccuracyPct, 2) },
-  { title: '胜率', key: 'winRatePct', render: (row: StrategyCompareItem) => metric(row.winRatePct, 2) },
-  { title: '平均模拟收益', key: 'avgSimulatedReturnPct', render: (row: StrategyCompareItem) => metric(row.avgSimulatedReturnPct, 2) },
-  { title: '最大回撤', key: 'maxDrawdownPct', render: (row: StrategyCompareItem) => metric(row.maxDrawdownPct, 2) },
-]
-
-useEcharts('distributionRef', distributionOptions)
-useEcharts('equityRef', equityOptions)
-useEcharts('drawdownRef', drawdownOptions)
+useEcharts('strategyEquityRef', equityOptions)
 
 onMounted(async () => {
-  await loadBundle()
-  await runCompare()
+  await loadHistory(1)
 })
 </script>
 
 <template>
   <n-space vertical :size="SPACING.md">
-    <n-grid :cols="24" :x-gap="GRID_GAP.outer" :y-gap="GRID_GAP.outer" responsive="screen">
-      <n-grid-item :span="24" :l-span="16">
-        <n-card title="回测控制台" size="small">
-          <template #header-extra>
-            <n-popover trigger="hover">
-              <template #trigger>
-                <n-tag :type="sourceType">
-                  {{ sourceText }}
-                </n-tag>
-              </template>
-              <n-space vertical :size="SPACING.sm">
-                <n-text>当前来源：{{ sourceText }}</n-text>
-                <n-text v-if="missingApis.length > 0" depth="3">
-                  缺失接口：{{ missingApis.join(', ') }}
-                </n-text>
-              </n-space>
-            </n-popover>
-          </template>
-
+    <n-grid :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.outerGap" :y-gap="DASHBOARD_LAYOUT.outerGap" responsive="screen">
+      <n-grid-item :span="24">
+        <n-card title="策略回测（日期区间）" :size="CARD_DENSITY.default">
           <n-space vertical :size="SPACING.md">
             <n-grid :cols="24" :x-gap="GRID_GAP.inner" :y-gap="GRID_GAP.inner" responsive="screen">
-              <n-grid-item :span="24" :m-span="12" :l-span="8">
-                <n-input v-model:value="code" placeholder="股票代码（可选）" clearable />
+              <n-grid-item :span="24" :m-span="12" :l-span="6">
+                <n-input v-model:value="code" placeholder="股票代码（必填）" clearable />
+              </n-grid-item>
+              <n-grid-item :span="24" :m-span="12" :l-span="10">
+                <n-date-picker
+                  v-model:value="dateRange"
+                  type="daterange"
+                  clearable
+                  class="w-full"
+                  :is-date-disabled="() => false"
+                />
               </n-grid-item>
               <n-grid-item :span="24" :m-span="12" :l-span="8">
-                <n-input-number v-model:value="evalWindowDays" :min="1" :max="120" clearable>
+                <n-checkbox-group v-model:value="strategyCodes">
+                  <n-space :size="SPACING.sm" :wrap="true">
+                    <n-checkbox v-for="item in strategyOptions" :key="item.code" :value="item.code">
+                      {{ item.label }}
+                    </n-checkbox>
+                  </n-space>
+                </n-checkbox-group>
+              </n-grid-item>
+
+              <n-grid-item :span="24" :m-span="8" :l-span="8">
+                <n-input-number v-model:value="initialCapital" :min="1" clearable>
                   <template #prefix>
-                    评估窗口
+                    初始资金
                   </template>
                 </n-input-number>
               </n-grid-item>
-              <n-grid-item :span="24" :m-span="24" :l-span="8">
-                <n-switch v-model:value="force">
-                  <template #checked>
-                    强制重算
+              <n-grid-item :span="24" :m-span="8" :l-span="8">
+                <n-input-number v-model:value="commissionRate" :min="0" :max="1" :step="0.0001" clearable>
+                  <template #prefix>
+                    佣金率
                   </template>
-                  <template #unchecked>
-                    增量模式
+                </n-input-number>
+              </n-grid-item>
+              <n-grid-item :span="24" :m-span="8" :l-span="8">
+                <n-input-number v-model:value="slippageBps" :min="0" :max="1000" :step="0.5" clearable>
+                  <template #prefix>
+                    滑点(bps)
                   </template>
-                </n-switch>
+                </n-input-number>
               </n-grid-item>
             </n-grid>
 
             <n-space :size="SPACING.sm" :wrap="true">
-              <n-button secondary :loading="loading" @click="() => { page = 1; loadBundle() }">
-                刷新
-              </n-button>
-              <n-button type="primary" :loading="running" @click="run">
-                运行回测
-              </n-button>
-              <n-button tertiary :disabled="results.length === 0" @click="exportReport">
-                导出报告
-              </n-button>
+              <NButton type="primary" :loading="running" @click="runBacktest">
+                运行策略回测
+              </NButton>
+              <NButton secondary :loading="loadingHistory" @click="loadHistory(1)">
+                刷新历史
+              </NButton>
             </n-space>
-          </n-space>
-        </n-card>
-      </n-grid-item>
 
-      <n-grid-item :span="24" :l-span="8">
-        <n-card title="执行反馈" size="small">
-          <template #header-extra>
-            <n-tag :type="runStatusTag.type">
-              {{ runStatusTag.label }}
-            </n-tag>
-          </template>
-
-          <n-space vertical :size="SPACING.sm">
+            <n-alert type="info" :show-icon="false">
+              当前主入口为策略日期区间回测；旧事件回测接口仍保留，并在返回体中标注 <code>legacy_event_backtest=true</code>。
+            </n-alert>
             <n-alert v-if="runError" type="error" :show-icon="false">
               {{ runError }}
             </n-alert>
-            <n-alert v-for="item in warnings" :key="item" type="warning" :show-icon="false">
-              {{ item }}
-            </n-alert>
-
-            <n-descriptions v-if="runSummary" :column="1" bordered size="small" label-placement="left">
-              <n-descriptions-item label="处理">
-                {{ runSummary.processed }}
-              </n-descriptions-item>
-              <n-descriptions-item label="保存">
-                {{ runSummary.saved }}
-              </n-descriptions-item>
-              <n-descriptions-item label="完成">
-                {{ runSummary.completed }}
-              </n-descriptions-item>
-              <n-descriptions-item label="数据不足">
-                {{ runSummary.insufficient }}
-              </n-descriptions-item>
-              <n-descriptions-item label="异常">
-                {{ runSummary.errors }}
-              </n-descriptions-item>
-            </n-descriptions>
           </n-space>
         </n-card>
       </n-grid-item>
     </n-grid>
 
-    <n-card title="回测 KPI 概览" size="small">
-      <n-grid :cols="24" :x-gap="GRID_GAP.inner" :y-gap="GRID_GAP.inner" responsive="screen">
-        <n-grid-item v-for="item in kpiStats" :key="item.key" :span="24" :s-span="12" :m-span="12" :l-span="8">
-          <n-card embedded size="small">
-            <n-space vertical :size="SPACING.sm">
-              <n-text depth="3">
-                {{ item.label }}
-              </n-text>
-              <n-statistic :value="item.value ?? 0" :precision="item.key === 'completed' ? 0 : 2">
-                <template v-if="item.suffix" #suffix>
-                  {{ item.suffix }}
-                </template>
-              </n-statistic>
-              <n-text v-if="item.value == null" depth="3">
-                --
-              </n-text>
-            </n-space>
-          </n-card>
-        </n-grid-item>
-      </n-grid>
-    </n-card>
-
-    <n-grid :cols="24" :x-gap="GRID_GAP.outer" :y-gap="GRID_GAP.outer" responsive="screen">
+    <n-grid :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.outerGap" :y-gap="DASHBOARD_LAYOUT.outerGap" responsive="screen">
       <n-grid-item :span="24" :l-span="12">
-        <n-card title="收益曲线（策略 vs 标的）" size="small">
-          <n-empty v-if="curves.length === 0" description="暂无可绘制曲线的数据" />
-          <div v-else ref="equityRef" :style="compactChartStyle" />
+        <n-card title="运行摘要" :size="CARD_DENSITY.default">
+          <n-empty v-if="!currentRun" description="暂无回测结果" />
+          <n-space v-else vertical :size="SPACING.sm">
+            <n-descriptions bordered :column="1" size="small" label-placement="left">
+              <n-descriptions-item label="Run Group">
+                <NTag size="small" type="info">
+                  {{ currentRun.runGroupId }}
+                </NTag>
+              </n-descriptions-item>
+              <n-descriptions-item label="代码">
+                {{ currentRun.code }}
+              </n-descriptions-item>
+              <n-descriptions-item label="请求区间">
+                {{ currentRun.requestedRange.startDate }} ~ {{ currentRun.requestedRange.endDate }}
+              </n-descriptions-item>
+              <n-descriptions-item label="有效交易区间">
+                {{ currentRun.effectiveRange.startDate }} ~ {{ currentRun.effectiveRange.endDate }}
+              </n-descriptions-item>
+              <n-descriptions-item label="引擎版本">
+                {{ currentRun.engineVersion }}
+              </n-descriptions-item>
+              <n-descriptions-item label="策略数量">
+                {{ currentRun.items.length }}
+              </n-descriptions-item>
+            </n-descriptions>
+            <n-alert v-if="runNoTradeSummary" type="warning" :show-icon="false">
+              运行成功，当前区间无成交，原因：{{ runNoTradeSummary }}
+            </n-alert>
+          </n-space>
         </n-card>
       </n-grid-item>
 
       <n-grid-item :span="24" :l-span="12">
-        <n-card title="总体绩效" size="small">
-          <n-spin :show="loadingPerf">
-            <n-empty v-if="!overall" description="暂无绩效数据" />
-            <n-descriptions v-else bordered :column="1" size="small" label-placement="left">
-              <n-descriptions-item label="方向准确率">
-                {{ metric(overall.directionAccuracyPct) }}
-              </n-descriptions-item>
-              <n-descriptions-item label="胜率">
-                {{ metric(overall.winRatePct) }}
-              </n-descriptions-item>
-              <n-descriptions-item label="平均模拟收益">
-                {{ metric(overall.avgSimulatedReturnPct) }}
-              </n-descriptions-item>
-              <n-descriptions-item label="平均标的收益">
-                {{ metric(overall.avgStockReturnPct) }}
-              </n-descriptions-item>
-              <n-descriptions-item label="最大回撤">
-                {{ metric(maxDrawdownPct, 2) }}
-              </n-descriptions-item>
-              <n-descriptions-item label="样本数">
-                {{ overall.completedCount }}/{{ overall.totalEvaluations }}
-              </n-descriptions-item>
-            </n-descriptions>
+        <n-card title="策略净值曲线" :size="CARD_DENSITY.default">
+          <n-spin :show="loadingDetail || running">
+            <n-empty v-if="!currentRun || !hasEquityData" description="暂无可绘制曲线" />
+            <div v-else ref="strategyEquityRef" :style="{ width: '100%', height: `${CHART_HEIGHT.compactDesktop}px` }" />
           </n-spin>
         </n-card>
       </n-grid-item>
+    </n-grid>
 
+    <n-grid :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.outerGap" :y-gap="DASHBOARD_LAYOUT.outerGap" responsive="screen">
       <n-grid-item :span="24" :l-span="12">
-        <n-card title="回撤曲线" size="small">
-          <n-empty v-if="curves.length === 0" description="暂无可绘制回撤的数据" />
-          <div v-else ref="drawdownRef" :style="compactChartStyle" />
+        <n-card title="策略指标对比" :size="CARD_DENSITY.default">
+          <n-data-table
+            size="small"
+            :columns="metricsColumns"
+            :data="metricsRows"
+            :row-key="(row: any) => row.strategyCode"
+          />
         </n-card>
       </n-grid-item>
 
       <n-grid-item :span="24" :l-span="12">
-        <n-card title="交易分布" size="small">
-          <div ref="distributionRef" :style="compactChartStyle" />
+        <n-card title="交易明细" :size="CARD_DENSITY.default">
+          <n-data-table
+            size="small"
+            :columns="tradeColumns"
+            :data="tradeRows"
+            :row-key="(row: any) => `${row.strategyName}-${row.entryDate || ''}-${row.exitDate || ''}-${row.qty || ''}-${row.entryPrice || ''}`"
+          />
         </n-card>
       </n-grid-item>
     </n-grid>
 
-    <n-grid :cols="24" :x-gap="GRID_GAP.outer" :y-gap="GRID_GAP.outer" responsive="screen">
-      <n-grid-item :span="24" :l-span="8">
-        <n-card title="多策略对比" size="small">
-          <n-space vertical :size="SPACING.sm">
-            <n-checkbox-group v-model:value="compareWindows">
-              <n-space :size="SPACING.sm" :wrap="true">
-                <n-checkbox :value="5">
-                  5
-                </n-checkbox>
-                <n-checkbox :value="10">
-                  10
-                </n-checkbox>
-                <n-checkbox :value="20">
-                  20
-                </n-checkbox>
-                <n-checkbox :value="30">
-                  30
-                </n-checkbox>
-              </n-space>
-            </n-checkbox-group>
-
-            <n-button secondary :loading="comparing" @click="runCompare">
-              运行对比
-            </n-button>
-
-            <n-alert v-if="compareError" type="error" :show-icon="false">
-              {{ compareError }}
-            </n-alert>
-
-            <n-data-table size="small" :columns="compareColumns" :data="compareRows" :row-key="(row: StrategyCompareItem) => row.evalWindowDays" />
-          </n-space>
-        </n-card>
-      </n-grid-item>
-
-      <n-grid-item :span="24" :l-span="16">
-        <n-card title="回测结果列表" size="small">
-          <n-space vertical :size="SPACING.sm">
-            <n-data-table size="small" :loading="loading" :columns="resultColumns" :data="results" :row-key="(row: BacktestResultItem) => `${row.analysisHistoryId}-${row.evalWindowDays}`" />
-            <n-pagination
-              :page="page"
-              :item-count="total"
-              :page-size="pageSize"
-              @update:page="(value) => { page = value; loadBundle(); }"
-            />
-          </n-space>
-        </n-card>
-      </n-grid-item>
-    </n-grid>
+    <n-card title="历史策略回测记录" :size="CARD_DENSITY.default">
+      <n-space vertical :size="SPACING.sm">
+        <n-data-table
+          size="small"
+          :loading="loadingHistory"
+          :columns="historyColumns"
+          :data="historyRows"
+          :row-key="(row: StrategyRunHistoryItem) => row.runGroupId"
+        />
+        <n-pagination
+          :page="historyPage"
+          :item-count="historyTotal"
+          :page-size="historyPageSize"
+          @update:page="(value) => { historyPage = value; loadHistory(value); }"
+        />
+      </n-space>
+    </n-card>
   </n-space>
 </template>
