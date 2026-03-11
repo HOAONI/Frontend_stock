@@ -1,4 +1,16 @@
-export type AiProvider = 'openai' | 'deepseek' | 'custom'
+export type AiProvider = 'gemini' | 'anthropic' | 'openai' | 'deepseek' | 'custom'
+export type PersonalAiProvider = 'openai' | 'deepseek'
+
+export interface UserAiRuntimeMeta {
+  provider: AiProvider | ''
+  baseUrl: string
+  model: string
+}
+
+export interface UserAiSystemRuntimeMeta extends UserAiRuntimeMeta {
+  hasToken: boolean
+  source: 'agent_runtime' | 'agent_env_fallback' | 'system_config' | 'none'
+}
 
 export interface UserSimulationSettings {
   accountName: string
@@ -8,11 +20,17 @@ export interface UserSimulationSettings {
 }
 
 export interface UserAiSettings {
-  provider: AiProvider
+  personalProvider: PersonalAiProvider | ''
+  provider: AiProvider | ''
   baseUrl: string
   model: string
   hasToken: boolean
   apiTokenMasked: string
+  source: 'system' | 'personal'
+  hasSystemToken: boolean
+  requiresProviderReselection: boolean
+  systemDefault: UserAiSystemRuntimeMeta
+  effective: UserAiRuntimeMeta
 }
 
 export interface UserStrategySettings {
@@ -31,9 +49,7 @@ export interface UserSettingsResponse {
 export interface UpdateUserSettingsRequest {
   simulation?: Partial<UserSimulationSettings>
   ai?: {
-    provider?: AiProvider
-    baseUrl?: string
-    model?: string
+    provider?: PersonalAiProvider
     apiToken?: string
   }
   strategy?: Partial<UserStrategySettings>
@@ -48,11 +64,27 @@ export function createDefaultUserSettings(): UserSettingsResponse {
       note: '',
     },
     ai: {
-      provider: 'openai',
-      baseUrl: 'https://api.openai.com/v1',
-      model: 'gpt-4o-mini',
+      personalProvider: '',
+      provider: '',
+      baseUrl: '',
+      model: '',
       hasToken: false,
       apiTokenMasked: '',
+      source: 'system',
+      hasSystemToken: false,
+      requiresProviderReselection: false,
+      systemDefault: {
+        provider: '',
+        baseUrl: '',
+        model: '',
+        hasToken: false,
+        source: 'none',
+      },
+      effective: {
+        provider: '',
+        baseUrl: '',
+        model: '',
+      },
     },
     strategy: {
       positionMaxPct: 30,

@@ -7,7 +7,7 @@ const sessionStore = useSessionStore()
 
 const username = computed(() => sessionStore.currentUser?.username || '游客')
 const roleLabel = computed(() => {
-  if (sessionStore.isSuperAdmin)
+  if (sessionStore.isAdmin)
     return '管理员'
   return '普通用户'
 })
@@ -32,7 +32,7 @@ const options = computed(() => {
     },
   ] as Array<Record<string, unknown>>
 
-  if (sessionStore.isSuperAdmin) {
+  if (sessionStore.isAdmin) {
     base.push(
       {
         label: '系统配置',

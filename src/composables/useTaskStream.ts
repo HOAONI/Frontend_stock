@@ -9,6 +9,7 @@ interface UseTaskStreamOptions {
   onTaskStarted?: (task: TaskInfo) => void
   onTaskCompleted?: (task: TaskInfo) => void
   onTaskFailed?: (task: TaskInfo) => void
+  onTaskCancelled?: (task: TaskInfo) => void
   onError?: (error: Event) => void
 }
 
@@ -73,6 +74,12 @@ export function useTaskStream(options: UseTaskStreamOptions = {}) {
       const task = parseTask((event as MessageEvent).data)
       if (task)
         options.onTaskFailed?.(task)
+    })
+
+    source.addEventListener('task_cancelled', (event) => {
+      const task = parseTask((event as MessageEvent).data)
+      if (task)
+        options.onTaskCancelled?.(task)
     })
 
     source.onerror = (error) => {

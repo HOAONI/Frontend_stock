@@ -12,6 +12,11 @@ export interface AdminLogItem {
   success: boolean
   durationMs: number
   errorCode?: string | null
+  eventType: string
+  eventSummary: string
+  moduleLabel: string
+  resultLabel: '成功' | '失败'
+  targetLabel?: string | null
   createdAt: string
 }
 

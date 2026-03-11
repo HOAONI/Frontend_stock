@@ -105,9 +105,9 @@ interface RecentResultDisplayItem {
   taskId: string
   stockCode: string
   stockName: string
-  status: 'completed' | 'failed'
+  status: 'completed' | 'failed' | 'cancelled'
   finishedAt: string
-  statusTagType: 'success' | 'error'
+  statusTagType: 'success' | 'error' | 'warning'
   summaryText: string
   queryId: string | null
   canOpenReport: boolean
@@ -185,6 +185,9 @@ const { isConnected } = useTaskStream({
   onTaskFailed: (task) => {
     handleEventTask(task)
   },
+  onTaskCancelled: (task) => {
+    handleEventTask(task)
+  },
   onError: () => {
     const now = Date.now()
     if (now - lastStreamWarnAt.value >= 15_000) {
@@ -216,6 +219,8 @@ function statusLabel(status: TaskInfo['status']): string {
     return '处理中'
   if (status === 'completed')
     return '已完成'
+  if (status === 'cancelled')
+    return '已取消'
   return '失败'
 }
 
@@ -251,6 +256,22 @@ const recentResultItems = computed<RecentResultDisplayItem[]>(() => {
         queryId: null,
         canOpenReport: false,
         unmatchedReason: '未关联报告',
+      })
+      return
+    }
+
+    if (task.status === 'cancelled') {
+      items.push({
+        taskId: task.taskId,
+        stockCode: task.stockCode,
+        stockName: task.stockName || '--',
+        status: 'cancelled',
+        finishedAt,
+        statusTagType: 'warning',
+        summaryText: task.message || '任务已取消',
+        queryId: null,
+        canOpenReport: false,
+        unmatchedReason: '任务未执行完成',
       })
       return
     }
@@ -677,10 +698,13 @@ onUnmounted(() => {
                 <n-radio-button value="failed">
                   失败
                 </n-radio-button>
+                <n-radio-button value="cancelled">
+                  已取消
+                </n-radio-button>
               </n-radio-group>
             </template>
 
-            <n-empty v-if="recentResultItems.length === 0" description="暂无最近完成或失败任务" />
+            <n-empty v-if="recentResultItems.length === 0" description="暂无最近完成、失败或取消任务" />
             <n-list v-else hoverable>
               <n-list-item v-for="item in recentResultItems" :key="item.taskId">
                 <n-card embedded :size="CARD_DENSITY.embedded">

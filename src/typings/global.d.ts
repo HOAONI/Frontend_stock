@@ -31,6 +31,7 @@ declare namespace NaiveUI {
 declare namespace Storage {
   interface Session {
     dict: DictMap
+    backtestCenter: App.BacktestCenterSessionState
   }
 
   interface Local {
@@ -49,6 +50,59 @@ declare namespace Storage {
 
 declare namespace App {
   type lang = 'zhCN' | 'enUS'
+  type BacktestCenterMode = 'strategy' | 'agent'
+
+  interface BacktestCenterStrategyPendingRequest {
+    mode: 'strategy'
+    code: string
+    startDate: string
+    endDate: string
+    strategyIds: number[]
+    initialCapital: number | null
+    commissionRate: number | null
+    slippageBps: number | null
+    startedAt: string
+  }
+
+  interface BacktestCenterAgentPendingRequest {
+    mode: 'agent'
+    code: string
+    startDate: string
+    endDate: string
+    initialCapital: number | null
+    commissionRate: number | null
+    slippageBps: number | null
+    positionMaxPct: number | null
+    stopLossPct: number | null
+    takeProfitPct: number | null
+    enableRefine: boolean
+    startedAt: string
+  }
+
+  interface BacktestCenterSessionState {
+    version: number
+    mode: BacktestCenterMode
+    code: string
+    dateRange: [number, number] | null
+    initialCapital: number | null
+    commissionRate: number | null
+    slippageBps: number | null
+    strategy: {
+      strategyIds: number[]
+      historyPage: number
+      activeRunGroupId: number | null
+      pendingRequestSignature: BacktestCenterStrategyPendingRequest | null
+    }
+    agent: {
+      positionMaxPct: number | null
+      stopLossPct: number | null
+      takeProfitPct: number | null
+      enableRefine: boolean
+      historyPage: number
+      activeRunGroupId: number | null
+      pendingRequestSignature: BacktestCenterAgentPendingRequest | null
+    }
+  }
 }
 
 interface DictMap {

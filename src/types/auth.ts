@@ -1,3 +1,5 @@
+export type RegisterAccountType = 'user' | 'admin'
+
 export interface AuthStatusResponse {
   authEnabled: boolean
   loggedIn: boolean
@@ -20,4 +22,6 @@ export interface RegisterRequest {
   password: string
   confirmPassword: string
   displayName?: string
+  accountType?: RegisterAccountType
+  adminSecret?: string
 }

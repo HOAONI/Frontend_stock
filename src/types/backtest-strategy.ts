@@ -1,10 +1,54 @@
-export const STRATEGY_RANGE_CODES = ['ma20_trend', 'rsi14_mean_reversion'] as const
+export type BacktestStrategyTemplateCode = 'ma_cross' | 'rsi_threshold'
 
-export type StrategyRangeCode = (typeof STRATEGY_RANGE_CODES)[number]
+export interface BacktestStrategyTemplateParamSchema {
+  key: string
+  label: string
+  description: string
+  min: number
+  max: number
+  step: number
+  defaultValue: number
+}
 
-export const STRATEGY_RANGE_NAME_MAP: Record<StrategyRangeCode, string> = {
-  ma20_trend: 'MA20 Trend',
-  rsi14_mean_reversion: 'RSI14 Mean Reversion',
+export interface BacktestStrategyTemplate {
+  templateCode: BacktestStrategyTemplateCode
+  templateName: string
+  description: string
+  defaultParams: Record<string, number>
+  paramSchema: BacktestStrategyTemplateParamSchema[]
+}
+
+export interface BacktestStrategyTemplateListResponse {
+  items: BacktestStrategyTemplate[]
+}
+
+export interface UserBacktestStrategyItem {
+  id: number
+  name: string
+  description: string | null
+  templateCode: BacktestStrategyTemplateCode
+  templateName: string
+  params: Record<string, number>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface UserBacktestStrategyListResponse {
+  items: UserBacktestStrategyItem[]
+}
+
+export interface CreateUserBacktestStrategyRequest {
+  name: string
+  description?: string
+  templateCode: BacktestStrategyTemplateCode
+  params: Record<string, number>
+}
+
+export interface UpdateUserBacktestStrategyRequest {
+  name?: string
+  description?: string
+  templateCode?: BacktestStrategyTemplateCode
+  params?: Record<string, number>
 }
 
 export interface StrategyEquityPoint {
@@ -28,8 +72,11 @@ export interface StrategyTradeItem {
 
 export interface StrategyRunItem {
   runId: number
-  strategyCode: StrategyRangeCode
+  strategyId: number | null
+  strategyCode: string
   strategyName: string
+  templateCode: string
+  templateName: string
   strategyVersion: string
   params: Record<string, unknown>
   metrics: Record<string, unknown>
@@ -63,8 +110,11 @@ export interface StrategyRunHistoryItem {
   createdAt: string
   strategies: Array<{
     runId: number
-    strategyCode: StrategyRangeCode
+    strategyId: number | null
+    strategyCode: string
     strategyName: string
+    templateCode: string
+    templateName: string
     strategyVersion: string
     metrics: Record<string, unknown>
   }>
@@ -82,7 +132,8 @@ export interface StrategyRangeRunRequest {
   code: string
   startDate: string
   endDate: string
-  strategyCodes?: StrategyRangeCode[]
+  strategyIds?: number[]
+  strategyCodes?: string[]
   initialCapital?: number
   commissionRate?: number
   slippageBps?: number

@@ -18,7 +18,7 @@ export function usePermission() {
     if (roles.length === 0)
       return false
 
-    let has = roles.includes('super_admin')
+    let has = roles.includes('admin')
     if (!has) {
       if (isArray(permission))
         has = permission.some(i => roles.includes(i))

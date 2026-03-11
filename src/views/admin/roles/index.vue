@@ -234,8 +234,8 @@ function removeRole() {
     window.$message.warning('请先选择角色')
     return
   }
-  if (current.roleCode === 'super_admin') {
-    window.$message.warning('super_admin 角色禁止删除')
+  if (current.roleCode === 'admin') {
+    window.$message.warning('admin 角色禁止删除')
     return
   }
   window.$dialog.warning({
@@ -303,7 +303,7 @@ onMounted(async () => {
         <n-button :disabled="!selectedRole" @click="() => openDetail()">
           查看详情
         </n-button>
-        <n-button type="error" :disabled="!selectedRole || selectedRole.roleCode === 'super_admin'" @click="removeRole">
+        <n-button type="error" :disabled="!selectedRole || selectedRole.roleCode === 'admin'" @click="removeRole">
           删除
         </n-button>
       </n-space>
@@ -375,7 +375,7 @@ onMounted(async () => {
         <n-grid :cols="24" :x-gap="16">
           <n-grid-item :span="24" :l-span="12">
             <n-form-item label="角色编码">
-              <n-input v-model:value="editForm.roleCode" :disabled="editMode === 'edit' && editForm.roleCode === 'super_admin'" placeholder="如 analyst_ext" />
+              <n-input v-model:value="editForm.roleCode" :disabled="editMode === 'edit' && editForm.roleCode === 'admin'" placeholder="如 custom_admin" />
             </n-form-item>
           </n-grid-item>
           <n-grid-item :span="24" :l-span="12">

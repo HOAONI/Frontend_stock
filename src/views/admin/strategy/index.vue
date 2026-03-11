@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { NTag } from 'naive-ui'
+import { h } from 'vue'
 import type { SystemConfigItem } from '@/types/system-config'
 import {
   getSystemConfig,
@@ -7,6 +9,7 @@ import {
   updateSystemConfig,
   validateSystemConfig,
 } from '@/api/system-config'
+import { getSystemConfigFieldDisplay } from '@/utils/system-config-display'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -26,12 +29,46 @@ const filteredItems = computed(() => {
   return items.value
     .filter(item => ['base', 'backtest'].includes(item.schema?.category || ''))
     .filter((item) => {
-      const keyword = filter.value.trim().toUpperCase()
+      const keyword = filter.value.trim().toLowerCase()
+      const display = getSystemConfigFieldDisplay(item)
       if (!keyword)
         return true
-      return item.key.includes(keyword)
+      return [
+        item.key,
+        display.title,
+        display.description,
+        display.categoryTitle,
+      ].some(text => String(text || '').toLowerCase().includes(keyword))
     })
 })
+
+function getCategoryTagType(category?: string | null): 'info' | 'warning' | 'default' {
+  if (category === 'backtest')
+    return 'warning'
+  if (category === 'base')
+    return 'info'
+  return 'default'
+}
+
+function renderConfigName(row: SystemConfigItem) {
+  const display = getSystemConfigFieldDisplay(row)
+  return h('div', { class: 'config-name-cell' }, [
+    h('div', { class: 'config-primary-text' }, display.title),
+    h('div', { class: 'config-secondary-text' }, row.key),
+  ])
+}
+
+function renderConfigDescription(row: SystemConfigItem) {
+  const display = getSystemConfigFieldDisplay(row)
+  return h(
+    'div',
+    {
+      class: 'config-description-cell',
+      title: display.description || '暂未提供用途说明',
+    },
+    display.description || '暂未提供用途说明',
+  )
+}
 
 async function load() {
   loading.value = true
@@ -105,11 +142,33 @@ async function saveCurrent() {
 }
 
 const columns = [
-  { title: '键名', key: 'key' },
+  {
+    title: '参数名称',
+    key: 'key',
+    render: (row: SystemConfigItem) => renderConfigName(row),
+  },
+  {
+    title: '用途说明',
+    key: 'description',
+    render: (row: SystemConfigItem) => renderConfigDescription(row),
+  },
   {
     title: '分类',
     key: 'category',
-    render: (row: SystemConfigItem) => row.schema?.category || '--',
+    render: (row: SystemConfigItem) => {
+      const display = getSystemConfigFieldDisplay(row)
+      return h(
+        NTag,
+        {
+          size: 'small',
+          type: getCategoryTagType(row.schema?.category),
+          round: true,
+        },
+        {
+          default: () => display.categoryTitle,
+        },
+      )
+    },
   },
   {
     title: '当前值',
@@ -125,13 +184,16 @@ onMounted(load)
 
 <template>
   <n-space vertical :size="16">
-    <n-card title="策略参数管理（base/backtest）" size="small">
+    <n-card title="策略参数管理" size="small">
       <n-space align="center" :wrap="true">
-        <n-input v-model:value="filter" clearable placeholder="按 key 过滤，例如 BACKTEST" style="width: 320px" />
+        <n-input v-model:value="filter" clearable placeholder="按参数名、用途说明或键名过滤" style="width: 360px" />
         <n-button :loading="loading" @click="load">
           刷新
         </n-button>
       </n-space>
+      <n-text depth="3" class="mt-3 block text-12px">
+        当前页面仅展示“基础配置”和“回测参数”两类与策略执行直接相关的配置项。
+      </n-text>
       <n-alert v-if="errorText" type="error" class="mt-3">
         {{ errorText }}
       </n-alert>
@@ -152,17 +214,24 @@ onMounted(load)
         <template v-if="currentItem">
           <n-space vertical :size="12">
             <n-descriptions :column="1" bordered size="small">
-              <n-descriptions-item label="键名">
+              <n-descriptions-item label="参数名称">
+                {{ getSystemConfigFieldDisplay(currentItem).title }}
+              </n-descriptions-item>
+              <n-descriptions-item label="原始键名">
                 {{ currentItem.key }}
               </n-descriptions-item>
               <n-descriptions-item label="分类">
-                {{ currentItem.schema?.category }}
+                {{ getSystemConfigFieldDisplay(currentItem).categoryTitle }}
               </n-descriptions-item>
               <n-descriptions-item label="数据类型">
-                {{ currentItem.schema?.dataType }}
+                {{ getSystemConfigFieldDisplay(currentItem).dataTypeLabel }}
+              </n-descriptions-item>
+              <n-descriptions-item label="用途说明">
+                {{ getSystemConfigFieldDisplay(currentItem).description || '暂未提供用途说明' }}
               </n-descriptions-item>
             </n-descriptions>
 
+            <n-form-item label="参数值">
             <n-input
               v-if="currentItem.schema?.uiControl !== 'textarea'"
               v-model:value="editValue"
@@ -175,6 +244,7 @@ onMounted(load)
               type="textarea"
               :autosize="{ minRows: 3, maxRows: 8 }"
             />
+            </n-form-item>
 
             <n-alert v-for="message in editIssues" :key="message" type="error">
               {{ message }}
@@ -194,3 +264,29 @@ onMounted(load)
     </n-drawer>
   </n-space>
 </template>
+
+<style scoped>
+.config-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.config-primary-text {
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.config-secondary-text {
+  color: var(--n-text-color-3);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.config-description-cell {
+  color: var(--n-text-color-2);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: normal;
+}
+</style>

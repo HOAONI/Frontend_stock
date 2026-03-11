@@ -2,7 +2,7 @@
 
 /* 角色数据库表字段 */
 namespace Entity {
-  type RoleType = 'super_admin' | 'analyst' | 'operator' | 'super' | 'admin' | 'user'
+  type RoleType = 'admin' | 'user'
 
   interface Role {
     /** 用户id */

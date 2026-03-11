@@ -55,7 +55,7 @@ export interface TaskInfo {
   taskId: string
   stockCode: string
   stockName?: string | null
-  status: 'pending' | 'processing' | 'completed' | 'failed'
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
   progress: number
   message?: string | null
   reportType: string
@@ -66,7 +66,7 @@ export interface TaskInfo {
 }
 
 export type TaskQueueSection = 'running' | 'recent'
-export type TaskTerminalStatus = 'completed' | 'failed'
+export type TaskTerminalStatus = 'completed' | 'failed' | 'cancelled'
 export type TaskSeenAtMap = Record<string, number>
 
 export interface TaskListResponse {
@@ -78,7 +78,7 @@ export interface TaskListResponse {
 
 export interface TaskStatus {
   taskId: string
-  status: 'pending' | 'processing' | 'completed' | 'failed'
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
   progress: number
   result?: AnalysisResult | null
   error?: string | null

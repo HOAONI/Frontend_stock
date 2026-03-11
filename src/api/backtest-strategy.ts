@@ -1,9 +1,14 @@
 import client from './client'
 import { toCamelCase } from './case'
 import type {
+  BacktestStrategyTemplateListResponse,
+  CreateUserBacktestStrategyRequest,
   StrategyRangeRunRequest,
   StrategyRangeRunResponse,
   StrategyRunHistoryResponse,
+  UpdateUserBacktestStrategyRequest,
+  UserBacktestStrategyItem,
+  UserBacktestStrategyListResponse,
 } from '@/types/backtest-strategy'
 
 export async function runStrategyBacktest(payload: StrategyRangeRunRequest): Promise<StrategyRangeRunResponse> {
@@ -12,6 +17,8 @@ export async function runStrategyBacktest(payload: StrategyRangeRunRequest): Pro
     start_date: payload.startDate,
     end_date: payload.endDate,
   }
+  if (payload.strategyIds && payload.strategyIds.length > 0)
+    body.strategy_ids = payload.strategyIds
   if (payload.strategyCodes && payload.strategyCodes.length > 0)
     body.strategy_codes = payload.strategyCodes
   if (payload.initialCapital != null)
@@ -53,4 +60,47 @@ export async function listStrategyBacktestRuns(params: {
 export async function getStrategyBacktestRunDetail(runGroupId: number): Promise<StrategyRangeRunResponse> {
   const { data } = await client.get(`/api/v1/backtest/strategy/runs/${runGroupId}`)
   return toCamelCase<StrategyRangeRunResponse>(data)
+}
+
+export async function listBacktestStrategyTemplates(): Promise<BacktestStrategyTemplateListResponse> {
+  const { data } = await client.get('/api/v1/backtest/strategies/templates')
+  return toCamelCase<BacktestStrategyTemplateListResponse>(data)
+}
+
+export async function listUserBacktestStrategies(): Promise<UserBacktestStrategyListResponse> {
+  const { data } = await client.get('/api/v1/backtest/strategies')
+  return toCamelCase<UserBacktestStrategyListResponse>(data)
+}
+
+export async function createUserBacktestStrategy(payload: CreateUserBacktestStrategyRequest): Promise<UserBacktestStrategyItem> {
+  const { data } = await client.post('/api/v1/backtest/strategies', {
+    name: payload.name,
+    description: payload.description,
+    template_code: payload.templateCode,
+    params: payload.params,
+  })
+  return toCamelCase<UserBacktestStrategyItem>(data)
+}
+
+export async function updateUserBacktestStrategy(
+  strategyId: number,
+  payload: UpdateUserBacktestStrategyRequest,
+): Promise<UserBacktestStrategyItem> {
+  const body: Record<string, unknown> = {}
+  if (payload.name != null)
+    body.name = payload.name
+  if (payload.description != null)
+    body.description = payload.description
+  if (payload.templateCode != null)
+    body.template_code = payload.templateCode
+  if (payload.params != null)
+    body.params = payload.params
+
+  const { data } = await client.patch(`/api/v1/backtest/strategies/${strategyId}`, body)
+  return toCamelCase<UserBacktestStrategyItem>(data)
+}
+
+export async function deleteUserBacktestStrategy(strategyId: number): Promise<{ deleted: boolean }> {
+  const { data } = await client.delete(`/api/v1/backtest/strategies/${strategyId}`)
+  return toCamelCase<{ deleted: boolean }>(data)
 }

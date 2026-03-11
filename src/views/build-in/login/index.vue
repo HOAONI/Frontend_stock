@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { RegisterAccountType } from '@/types/auth'
 import { HOME_PATH } from '@/constants/home-path'
 import { useSessionStore } from '@/store'
 
@@ -22,12 +23,15 @@ const registerForm = reactive({
   displayName: '',
   password: '',
   confirmPassword: '',
+  accountType: 'user' as RegisterAccountType,
+  adminSecret: '',
 })
 
 const loginSubmitting = ref(false)
 const registerSubmitting = ref(false)
 const loginError = ref('')
 const registerError = ref('')
+const registerIsAdmin = computed(() => registerForm.accountType === 'admin')
 
 function resolveRedirect(): string {
   const redirect = String(route.query.redirect ?? '')
@@ -64,6 +68,7 @@ function validateRegisterForm(): string | undefined {
     || validatePassword(registerForm.password)
     || (!registerForm.confirmPassword ? '请确认密码' : undefined)
     || (registerForm.password !== registerForm.confirmPassword ? '两次输入的密码不一致' : undefined)
+    || (registerIsAdmin.value && !registerForm.adminSecret.trim() ? '请输入管理员专属密钥' : undefined)
 }
 
 async function submitLogin() {
@@ -101,6 +106,8 @@ async function submitRegister() {
     displayName: registerForm.displayName.trim() || undefined,
     password: registerForm.password,
     confirmPassword: registerForm.confirmPassword,
+    accountType: registerForm.accountType,
+    adminSecret: registerIsAdmin.value ? registerForm.adminSecret.trim() : undefined,
   })
   registerSubmitting.value = false
 
@@ -114,6 +121,12 @@ async function submitRegister() {
   window.$message.success('注册成功，正在进入系统')
   router.replace(HOME_PATH)
 }
+
+watch(() => registerForm.accountType, (value) => {
+  registerError.value = ''
+  if (value !== 'admin')
+    registerForm.adminSecret = ''
+})
 
 onMounted(async () => {
   try {
@@ -166,9 +179,23 @@ onMounted(async () => {
 
         <n-tab-pane name="register" tab="注册">
           <n-form @submit.prevent="submitRegister">
-            <n-alert type="info" class="mb-4">
-              新注册账号默认创建为普通用户（analyst）
+            <n-alert :type="registerIsAdmin ? 'warning' : 'info'" class="mb-4">
+              {{
+                registerIsAdmin
+                  ? '管理员注册成功后将获得完整后台权限，请仅在确认专属密钥无误时使用。'
+                  : '普通用户注册成功后默认创建为 user 类型，不显示后台管理菜单。'
+              }}
             </n-alert>
+            <n-form-item label="注册类型">
+              <n-radio-group v-model:value="registerForm.accountType" name="register-account-type">
+                <n-radio-button value="user">
+                  普通用户
+                </n-radio-button>
+                <n-radio-button value="admin">
+                  管理员
+                </n-radio-button>
+              </n-radio-group>
+            </n-form-item>
             <n-form-item label="用户名">
               <n-input v-model:value="registerForm.username" placeholder="字母开头，3-32 位" />
             </n-form-item>
@@ -192,6 +219,15 @@ onMounted(async () => {
                 type="password"
                 show-password-on="click"
                 placeholder="请再次输入密码"
+              />
+            </n-form-item>
+
+            <n-form-item v-if="registerIsAdmin" label="管理员专属密钥">
+              <n-input
+                v-model:value="registerForm.adminSecret"
+                type="password"
+                show-password-on="click"
+                placeholder="请输入管理员专属密钥"
               />
             </n-form-item>
 

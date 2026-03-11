@@ -36,8 +36,30 @@ function extractRegisterError(error: unknown): string {
   if (status === 400) {
     return message || '注册参数校验失败，请检查输入'
   }
+  if (status === 403) {
+    return message || '管理员专属密钥错误'
+  }
 
   return message || '注册失败，请稍后重试'
+}
+
+function normalizeRoleCode(roleCode: string | null | undefined): string {
+  const value = String(roleCode || '').trim().toLowerCase()
+  if (value === 'super_admin')
+    return 'admin'
+  if (value === 'analyst' || value === 'operator')
+    return 'user'
+  return value
+}
+
+function normalizeCurrentUser(user: SessionState['currentUser'] | undefined | null): SessionState['currentUser'] {
+  if (!user)
+    return null
+
+  return {
+    ...user,
+    roles: Array.from(new Set((user.roles || []).map(normalizeRoleCode).filter(Boolean))),
+  }
 }
 
 export const useSessionStore = defineStore('session-store', {
@@ -52,11 +74,11 @@ export const useSessionStore = defineStore('session-store', {
     needLogin(state): boolean {
       return state.authEnabled && !state.loggedIn
     },
-    isSuperAdmin(state): boolean {
-      return state.currentUser?.roles.includes('super_admin') ?? false
+    isAdmin(state): boolean {
+      return state.currentUser?.roles.includes('admin') ?? false
     },
     isNormalUser(state): boolean {
-      return state.loggedIn && !this.isSuperAdmin
+      return state.loggedIn && !this.isAdmin
     },
   },
   actions: {
@@ -66,7 +88,7 @@ export const useSessionStore = defineStore('session-store', {
         const status = await getAuthStatus()
         this.authEnabled = status.authEnabled
         this.loggedIn = status.loggedIn
-        this.currentUser = status.currentUser ?? null
+        this.currentUser = normalizeCurrentUser(status.currentUser ?? null)
         this.initialized = true
       }
       finally {

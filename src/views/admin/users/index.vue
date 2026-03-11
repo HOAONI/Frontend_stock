@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { NTag } from 'naive-ui'
+import { h } from 'vue'
 import {
   createAdminUser,
   deleteAdminUser,
@@ -8,14 +10,13 @@ import {
   updateAdminUser,
   updateAdminUserStatus,
 } from '@/api/admin-users'
-import { listAdminRoles } from '@/api/admin-roles'
 import type { AdminUserItem, AdminUserStatus } from '@/types/admin-users'
 
 const loading = ref(false)
 const submitting = ref(false)
 const keyword = ref('')
 const status = ref<AdminUserStatus | null>(null)
-const roleCode = ref('')
+const roleCode = ref<string | null>(null)
 const page = ref(1)
 const limit = ref(20)
 const total = ref(0)
@@ -46,12 +47,22 @@ const resetPwdForm = reactive({
   newPassword: '',
 })
 
-const roleOptions = ref<Array<{ label: string, value: string }>>([])
-
 const statusOptions = [
   { label: '启用', value: 'active' },
   { label: '禁用', value: 'disabled' },
 ]
+
+const userTypeOptions = [
+  { label: '普通用户 (user)', value: 'user' },
+  { label: '管理员 (admin)', value: 'admin' },
+]
+
+const selectedRoleCode = computed({
+  get: () => editForm.roleCodes[0] || null,
+  set: (value: string | null) => {
+    editForm.roleCodes = value ? [value] : []
+  },
+})
 
 const currentSelected = computed(() => {
   if (!selectedUserId.value)
@@ -59,22 +70,50 @@ const currentSelected = computed(() => {
   return rows.value.find(item => item.id === selectedUserId.value) || null
 })
 
+const editButtonText = computed(() => currentSelected.value ? `编辑（${currentSelected.value.username}）` : '编辑')
+const detailButtonText = computed(() => currentSelected.value ? `查看详情（${currentSelected.value.username}）` : '查看详情')
+const selectedSummaryTitle = computed(() => currentSelected.value ? '当前选中用户' : '当前未选中用户')
+
 function getRolesText(user: AdminUserItem): string {
   if (!user.roles?.length)
     return '--'
-  return user.roles.map(role => role.roleCode).join(', ')
+  return user.roles.map(role => role.roleName || role.roleCode).join(', ')
 }
 
-function onRowClick(row: AdminUserItem) {
-  selectedUserId.value = row.id
+function getStatusText(status: AdminUserStatus): string {
+  return status === 'active' ? '启用' : '禁用'
 }
 
-async function loadRolesForForm() {
-  const result = await listAdminRoles({ page: 1, limit: 200 })
-  roleOptions.value = result.items.map(role => ({
-    label: `${role.roleName} (${role.roleCode})`,
-    value: role.roleCode,
-  }))
+function getStatusTagType(status: AdminUserStatus): 'success' | 'error' {
+  return status === 'active' ? 'success' : 'error'
+}
+
+function isSelectedUser(row: AdminUserItem): boolean {
+  return row.id === selectedUserId.value
+}
+
+function clearSelection() {
+  selectedUserId.value = null
+}
+
+function renderUsernameCell(row: AdminUserItem) {
+  return h('div', { class: 'user-name-cell' }, [
+    h('span', { class: 'user-name-text' }, row.username),
+  ])
+}
+
+function renderStatusTag(status: AdminUserStatus) {
+  return h(
+    NTag,
+    {
+      size: 'small',
+      type: getStatusTagType(status),
+      round: true,
+    },
+    {
+      default: () => getStatusText(status),
+    },
+  )
 }
 
 async function loadRows(reset = false) {
@@ -85,7 +124,7 @@ async function loadRows(reset = false) {
     const result = await listAdminUsers({
       keyword: keyword.value.trim() || undefined,
       status: status.value || undefined,
-      roleCode: roleCode.value.trim() || undefined,
+      roleCode: roleCode.value || undefined,
       page: page.value,
       limit: limit.value,
     })
@@ -133,7 +172,7 @@ function openCreate() {
   editForm.displayName = ''
   editForm.email = ''
   editForm.status = 'active'
-  editForm.roleCodes = ['analyst']
+  editForm.roleCodes = ['user']
   editVisible.value = true
 }
 
@@ -152,7 +191,7 @@ async function openEdit() {
     editForm.displayName = detail.displayName || ''
     editForm.email = detail.email || ''
     editForm.status = detail.status
-    editForm.roleCodes = detail.roles.map(role => role.roleCode)
+    editForm.roleCodes = detail.roles.length ? [detail.roles[0].roleCode] : ['user']
     editVisible.value = true
   }
   catch (error: unknown) {
@@ -167,7 +206,11 @@ function validateEditForm(): string | undefined {
   if (editMode.value === 'create' && !editForm.password.trim())
     return '创建用户时必须填写初始密码'
   if (!editForm.roleCodes.length)
-    return '至少选择一个角色'
+    return '必须选择一个用户类型'
+}
+
+function onRowClick(row: AdminUserItem) {
+  selectedUserId.value = row.id
 }
 
 async function submitEdit() {
@@ -299,7 +342,11 @@ function removeUser() {
 
 const columns = [
   { title: 'ID', key: 'id' },
-  { title: '用户名', key: 'username' },
+  {
+    title: '用户名',
+    key: 'username',
+    render: (row: AdminUserItem) => renderUsernameCell(row),
+  },
   {
     title: '显示名',
     key: 'displayName',
@@ -311,11 +358,15 @@ const columns = [
     render: (row: AdminUserItem) => row.email || '--',
   },
   {
-    title: '角色',
+    title: '用户类型',
     key: 'roles',
     render: (row: AdminUserItem) => getRolesText(row),
   },
-  { title: '状态', key: 'status' },
+  {
+    title: '状态',
+    key: 'status',
+    render: (row: AdminUserItem) => renderStatusTag(row.status),
+  },
   {
     title: '最后登录',
     key: 'lastLoginAt',
@@ -325,12 +376,6 @@ const columns = [
 ]
 
 onMounted(async () => {
-  try {
-    await loadRolesForForm()
-  }
-  catch {
-    window.$message.warning('角色选项加载失败，创建用户时可能无法选择角色')
-  }
   await loadRows(true)
 })
 </script>
@@ -341,7 +386,7 @@ onMounted(async () => {
       <n-space align="center" :wrap="true">
         <n-input v-model:value="keyword" clearable placeholder="关键字（用户名/显示名/邮箱）" style="width: 260px" />
         <n-select v-model:value="status" clearable :options="statusOptions" style="width: 160px" />
-        <n-input v-model:value="roleCode" clearable placeholder="角色编码（如 analyst）" style="width: 220px" />
+        <n-select v-model:value="roleCode" clearable :options="userTypeOptions" placeholder="用户类型" style="width: 220px" />
         <n-button :loading="loading" @click="() => loadRows(true)">
           查询
         </n-button>
@@ -351,7 +396,7 @@ onMounted(async () => {
           新增用户
         </n-button>
         <n-button :disabled="!currentSelected" @click="openEdit">
-          编辑
+          {{ editButtonText }}
         </n-button>
         <n-button :disabled="!currentSelected" @click="toggleUserStatus">
           {{ currentSelected?.status === 'active' ? '禁用' : '启用' }}
@@ -360,21 +405,59 @@ onMounted(async () => {
           重置密码
         </n-button>
         <n-button :disabled="!currentSelected" @click="() => openDetail()">
-          查看详情
+          {{ detailButtonText }}
         </n-button>
         <n-button type="error" :disabled="!currentSelected" @click="removeUser">
           删除
         </n-button>
       </n-space>
+
+      <n-alert class="mt-3 user-selection-alert" :type="currentSelected ? 'success' : 'info'">
+        <template #header>
+          {{ selectedSummaryTitle }}
+        </template>
+        <n-space align="center" justify="space-between" :wrap="true">
+          <n-space align="center" :wrap="true">
+            <template v-if="currentSelected">
+              <n-tag type="success" round>
+                {{ currentSelected.username }}
+              </n-tag>
+              <n-text depth="3">
+                ID: {{ currentSelected.id }}
+              </n-text>
+              <n-text depth="3">
+                状态:
+              </n-text>
+              <n-tag size="small" round :type="getStatusTagType(currentSelected.status)">
+                {{ getStatusText(currentSelected.status) }}
+              </n-tag>
+              <n-text depth="3">
+                用户类型: {{ getRolesText(currentSelected) }}
+              </n-text>
+            </template>
+            <n-text v-else depth="3">
+              点击下方表格任意一行后，可在这里看到当前操作对象。
+            </n-text>
+          </n-space>
+          <n-button v-if="currentSelected" size="small" quaternary @click="clearSelection">
+            取消选中
+          </n-button>
+        </n-space>
+      </n-alert>
     </n-card>
 
-    <n-card size="small">
+    <n-card size="small" class="admin-users-table-card">
       <n-data-table
+        class="admin-users-table"
         :loading="loading"
         :columns="columns"
         :data="rows"
         :row-key="(row: AdminUserItem) => row.id"
-        :row-props="(row: AdminUserItem) => ({ style: 'cursor:pointer', onClick: () => onRowClick(row) })"
+        :row-props="(row: AdminUserItem) => ({
+          class: isSelectedUser(row) ? 'selected-user-row' : undefined,
+          style: 'cursor:pointer',
+          onClick: () => onRowClick(row),
+        })"
       />
       <n-pagination
         class="mt-3"
@@ -402,9 +485,11 @@ onMounted(async () => {
               {{ detailData.email || '--' }}
             </n-descriptions-item>
             <n-descriptions-item label="状态">
-              {{ detailData.status }}
+              <n-tag size="small" round :type="getStatusTagType(detailData.status)">
+                {{ getStatusText(detailData.status) }}
+              </n-tag>
             </n-descriptions-item>
-            <n-descriptions-item label="角色">
+            <n-descriptions-item label="用户类型">
               {{ getRolesText(detailData) }}
             </n-descriptions-item>
             <n-descriptions-item label="创建时间">
@@ -444,8 +529,8 @@ onMounted(async () => {
             ]"
           />
         </n-form-item>
-        <n-form-item label="角色">
-          <n-select v-model:value="editForm.roleCodes" multiple :options="roleOptions" placeholder="至少选择一个角色" />
+        <n-form-item label="用户类型">
+          <n-select v-model:value="selectedRoleCode" :options="userTypeOptions" placeholder="请选择用户类型" />
         </n-form-item>
       </n-form>
 
@@ -484,3 +569,31 @@ onMounted(async () => {
     </n-modal>
   </n-space>
 </template>
+
+<style scoped>
+.user-name-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-name-text {
+  font-weight: 600;
+}
+
+.user-selection-alert {
+  border-radius: 12px;
+}
+
+:deep(.admin-users-table .selected-user-row > td) {
+  background: rgba(24, 160, 88, 0.1) !important;
+}
+
+:deep(.admin-users-table .selected-user-row > td:first-child) {
+  box-shadow: inset 4px 0 0 #18a058;
+}
+
+:deep(.admin-users-table .selected-user-row:hover > td) {
+  background: rgba(24, 160, 88, 0.14) !important;
+}
+</style>

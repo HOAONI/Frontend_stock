@@ -8,6 +8,11 @@ import {
   validateSystemConfig,
 } from '@/api/system-config'
 import { extractStockCodesFromImage } from '@/api/stocks'
+import {
+  getSystemConfigCategoryDisplay,
+  getSystemConfigDataTypeLabel,
+  getSystemConfigFieldDisplay,
+} from '@/utils/system-config-display'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -27,11 +32,12 @@ const categories = computed<SystemConfigCategorySchema[]>(() => {
     const schema = item.schema
     if (!schema)
       return
+    const categoryDisplay = getSystemConfigCategoryDisplay(schema.category)
     if (!map.has(schema.category)) {
       map.set(schema.category, {
         category: schema.category,
-        title: schema.category,
-        description: '',
+        title: categoryDisplay.title,
+        description: categoryDisplay.description,
         displayOrder: schema.displayOrder,
         fields: [],
       })
@@ -52,12 +58,22 @@ const dirtyCount = computed(() => {
   return items.value.filter(item => draft.value[item.key] !== item.value).length
 })
 
+const activeCategoryDisplay = computed(() => getSystemConfigCategoryDisplay(activeCategory.value))
+
 function issueMessages(key: string) {
   return issues.value.filter(issue => issue.key === key).map(issue => issue.message)
 }
 
 function toDisplayValue(item: SystemConfigItem): string {
   return draft.value[item.key] ?? item.value
+}
+
+function getConfigDisplay(item: SystemConfigItem) {
+  return getSystemConfigFieldDisplay(item)
+}
+
+function getDataTypeTagType(item: SystemConfigItem): 'warning' | 'default' {
+  return item.schema?.isSensitive ? 'warning' : 'default'
 }
 
 function setValue(key: string, value: string) {
@@ -224,21 +240,46 @@ onMounted(loadConfig)
           <n-spin :show="loading">
             <n-empty v-if="visibleItems.length === 0" description="当前分类暂无配置项" />
             <n-form v-else label-placement="top">
+              <n-alert type="info" class="mb-4">
+                <template #header>
+                  {{ activeCategoryDisplay.title }}
+                </template>
+                {{ activeCategoryDisplay.description }}
+              </n-alert>
               <n-space vertical :size="14">
                 <n-card
                   v-for="item in visibleItems"
                   :key="item.key"
                   embedded
                   size="small"
-                  :title="item.key"
                 >
+                  <template #header>
+                    <div class="config-card-header">
+                      <div class="config-card-title">
+                        {{ getConfigDisplay(item).title }}
+                      </div>
+                      <div class="config-card-subtitle">
+                        {{ getConfigDisplay(item).categoryTitle }}
+                      </div>
+                    </div>
+                  </template>
                   <template #header-extra>
-                    <n-tag size="small" :type="item.schema?.isSensitive ? 'warning' : 'default'">
-                      {{ item.schema?.dataType || 'string' }}
-                    </n-tag>
+                    <n-space size="small" :wrap="true">
+                      <n-tag size="small" round>
+                        {{ item.key }}
+                      </n-tag>
+                      <n-tag size="small" round :type="getDataTypeTagType(item)">
+                        {{ getSystemConfigDataTypeLabel(item.schema?.dataType) }}
+                      </n-tag>
+                    </n-space>
                   </template>
 
-                  <n-form-item :label="item.schema?.title || item.key">
+                  <n-space vertical :size="10">
+                    <n-text depth="3" class="text-12px">
+                      {{ getConfigDisplay(item).description || '暂未提供用途说明' }}
+                    </n-text>
+
+                    <n-form-item label="配置值">
                     <n-switch
                       v-if="item.schema?.uiControl === 'switch'"
                       :value="toDisplayValue(item) === 'true'"
@@ -266,20 +307,21 @@ onMounted(loadConfig)
                       :value="toDisplayValue(item)"
                       @update:value="(value) => setValue(item.key, value)"
                     />
-                  </n-form-item>
+                    </n-form-item>
 
-                  <n-text v-if="item.schema?.description" depth="3" class="text-12px">
-                    {{ item.schema.description }}
-                  </n-text>
+                    <n-text depth="3" class="text-12px">
+                      当前分类：{{ getConfigDisplay(item).categoryTitle }}
+                    </n-text>
 
-                  <n-alert
-                    v-for="message in issueMessages(item.key)"
-                    :key="message"
-                    class="mt-2"
-                    type="error"
-                  >
-                    {{ message }}
-                  </n-alert>
+                    <n-alert
+                      v-for="message in issueMessages(item.key)"
+                      :key="message"
+                      class="mt-2"
+                      type="error"
+                    >
+                      {{ message }}
+                    </n-alert>
+                  </n-space>
                 </n-card>
               </n-space>
             </n-form>
@@ -289,3 +331,22 @@ onMounted(loadConfig)
     </n-grid>
   </n-space>
 </template>
+
+<style scoped>
+.config-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.config-card-title {
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.config-card-subtitle {
+  color: var(--n-text-color-3);
+  font-size: 12px;
+  line-height: 1.4;
+}
+</style>

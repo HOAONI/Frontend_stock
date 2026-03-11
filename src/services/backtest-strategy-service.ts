@@ -1,12 +1,22 @@
 import {
+  createUserBacktestStrategy,
+  deleteUserBacktestStrategy,
   getStrategyBacktestRunDetail,
+  listBacktestStrategyTemplates,
   listStrategyBacktestRuns,
+  listUserBacktestStrategies,
   runStrategyBacktest,
+  updateUserBacktestStrategy,
 } from '@/api/backtest-strategy'
 import type {
+  BacktestStrategyTemplateListResponse,
+  CreateUserBacktestStrategyRequest,
   StrategyRangeRunRequest,
   StrategyRangeRunResponse,
   StrategyRunHistoryResponse,
+  UpdateUserBacktestStrategyRequest,
+  UserBacktestStrategyItem,
+  UserBacktestStrategyListResponse,
 } from '@/types/backtest-strategy'
 import { getDataMode } from './data-source'
 
@@ -47,4 +57,27 @@ export async function fetchStrategyRunHistory(input: StrategyRunHistoryInput): P
 
 export async function fetchStrategyRunDetail(runGroupId: number): Promise<StrategyRangeRunResponse> {
   return await getStrategyBacktestRunDetail(runGroupId)
+}
+
+export async function fetchBacktestStrategyTemplates(): Promise<BacktestStrategyTemplateListResponse> {
+  return await listBacktestStrategyTemplates()
+}
+
+export async function fetchUserBacktestStrategies(): Promise<UserBacktestStrategyListResponse> {
+  return await listUserBacktestStrategies()
+}
+
+export async function createMyBacktestStrategy(payload: CreateUserBacktestStrategyRequest): Promise<UserBacktestStrategyItem> {
+  return await createUserBacktestStrategy(payload)
+}
+
+export async function updateMyBacktestStrategy(
+  strategyId: number,
+  payload: UpdateUserBacktestStrategyRequest,
+): Promise<UserBacktestStrategyItem> {
+  return await updateUserBacktestStrategy(strategyId, payload)
+}
+
+export async function deleteMyBacktestStrategy(strategyId: number): Promise<{ deleted: boolean }> {
+  return await deleteUserBacktestStrategy(strategyId)
 }

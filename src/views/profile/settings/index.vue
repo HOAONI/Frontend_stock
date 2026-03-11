@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AiProvider } from '@/types/user-settings'
+import type { PersonalAiProvider } from '@/types/user-settings'
 import { useSessionStore, useUserSettingsStore } from '@/store'
 import { formatDateTime } from '@/utils/stock'
 
@@ -9,15 +9,13 @@ const userSettingsStore = useUserSettingsStore()
 
 const saveErrors = ref<string[]>([])
 const apiTokenInput = ref('')
+const personalProviderInput = ref<PersonalAiProvider | null>(null)
+const originalPersonalProvider = ref<PersonalAiProvider | ''>('')
 
-const providerOptions = [
-  { label: 'OpenAI', value: 'openai' },
-  { label: 'DeepSeek', value: 'deepseek' },
-  { label: 'Custom', value: 'custom' },
-]
+const MASKED_TOKEN = '******'
 
 const username = computed(() => sessionStore.currentUser?.username || '--')
-const roleText = computed(() => sessionStore.isSuperAdmin ? '管理员' : '普通用户')
+const roleText = computed(() => sessionStore.isAdmin ? '管理员' : '普通用户')
 const lastSavedAt = computed(() => {
   if (!userSettingsStore.settings.updatedAt)
     return '--'
@@ -26,21 +24,82 @@ const lastSavedAt = computed(() => {
 const CONTROL_WIDTH_STYLE = { width: '100%', maxWidth: '320px' }
 const TEXTAREA_WIDTH_STYLE = { width: '100%' }
 
-function syncTokenInput() {
-  const ai = userSettingsStore.settings.ai
-  apiTokenInput.value = ai.hasToken
-    ? (ai.apiTokenMasked || '******')
-    : ''
+const providerLabelMap: Record<string, string> = {
+  gemini: 'Gemini',
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
+  deepseek: 'DeepSeek',
+  custom: '自定义兼容接口',
 }
 
-watch(() => userSettingsStore.settings.ai.provider, (value) => {
-  if (value === 'openai' && !userSettingsStore.settings.ai.baseUrl.trim()) {
-    userSettingsStore.settings.ai.baseUrl = 'https://api.openai.com/v1'
-  }
-  if (value === 'deepseek' && !userSettingsStore.settings.ai.baseUrl.trim()) {
-    userSettingsStore.settings.ai.baseUrl = 'https://api.deepseek.com'
-  }
+const providerOptions = [
+  { label: 'DeepSeek', value: 'deepseek' },
+  { label: 'OpenAI', value: 'openai' },
+]
+
+const currentAiSourceText = computed(() => {
+  const ai = userSettingsStore.settings.ai
+  const providerText = formatProvider(ai.source === 'personal' ? ai.effective.provider : ai.systemDefault.provider)
+  if (ai.source === 'personal')
+    return `个人 ${providerText}`
+  return providerText === '--' ? '系统内置 AI' : `系统内置 ${providerText}`
 })
+const currentAiSourceType = computed(() =>
+  userSettingsStore.settings.ai.source === 'personal' ? 'success' : 'info',
+)
+const systemDefaultStateText = computed(() => {
+  const source = userSettingsStore.settings.ai.systemDefault.source
+  if (source === 'agent_runtime')
+    return '可用（运行中）'
+  if (source === 'agent_env_fallback')
+    return '可用（本地配置）'
+  if (source === 'system_config')
+    return '可用（系统配置）'
+  return '未配置'
+})
+const systemDefaultStateType = computed(() => (
+  userSettingsStore.settings.ai.systemDefault.source === 'none' ? 'warning' : 'success'
+))
+const aiSourceAlertType = computed(() => {
+  if (userSettingsStore.settings.ai.source === 'personal')
+    return 'success'
+  return userSettingsStore.settings.ai.systemDefault.source === 'none' ? 'warning' : 'info'
+})
+const aiSourceHintText = computed(() => {
+  const ai = userSettingsStore.settings.ai
+  if (ai.source === 'personal')
+    return '当前分析和回测会优先使用你的个人 Key。清空个人 Key 后会回退到系统内置 AI。'
+  if (ai.systemDefault.source === 'agent_runtime')
+    return '未配置个人 Key 时，会自动使用系统内置 AI。'
+  if (ai.systemDefault.source === 'agent_env_fallback')
+    return '未配置个人 Key 时，会自动使用系统内置 AI。当前运行中的 Agent 状态暂未确认，已按本地 Agent 配置推断。'
+  if (ai.systemDefault.source === 'system_config')
+    return '未配置个人 Key 时，会自动使用系统配置中的内置 AI。'
+  return '当前系统内置 AI 不可用，请联系管理员检查 Agent 默认 LLM 配置。'
+})
+
+function formatProvider(value: string | undefined) {
+  const key = String(value || '').trim().toLowerCase()
+  return providerLabelMap[key] || (key || '--')
+}
+
+function toPersonalProvider(value: string | undefined): PersonalAiProvider | '' {
+  const key = String(value || '').trim().toLowerCase()
+  return key === 'deepseek' || key === 'openai' ? key : ''
+}
+
+function pickDefaultPersonalProvider(): PersonalAiProvider {
+  return toPersonalProvider(userSettingsStore.settings.ai.systemDefault.provider) || 'deepseek'
+}
+
+function syncAiForm() {
+  const ai = userSettingsStore.settings.ai
+  originalPersonalProvider.value = ai.personalProvider
+  personalProviderInput.value = ai.personalProvider || pickDefaultPersonalProvider()
+  apiTokenInput.value = ai.hasToken
+    ? (ai.apiTokenMasked || MASKED_TOKEN)
+    : ''
+}
 
 function validate(): string[] {
   const issues: string[] = []
@@ -49,11 +108,6 @@ function validate(): string[] {
   if (!Number.isFinite(settings.simulation.initialCapital) || settings.simulation.initialCapital <= 0)
     issues.push('初始资金必须大于 0')
 
-  if (!settings.ai.baseUrl.trim())
-    issues.push('请填写 AI Base URL')
-  if (!settings.ai.model.trim())
-    issues.push('请填写 AI 模型名称')
-
   if (settings.strategy.positionMaxPct < 0 || settings.strategy.positionMaxPct > 100)
     issues.push('仓位上限需在 0-100 之间')
   if (settings.strategy.stopLossPct < 0 || settings.strategy.stopLossPct > 100)
@@ -61,24 +115,28 @@ function validate(): string[] {
   if (settings.strategy.takeProfitPct < 0 || settings.strategy.takeProfitPct > 100)
     issues.push('止盈阈值需在 0-100 之间')
 
-  return issues
-}
+  if (!personalProviderInput.value)
+    issues.push('请选择个人 AI 提供商')
 
-function handleProviderChange(value: string) {
-  const provider = value as AiProvider
-  userSettingsStore.settings.ai.provider = provider
-  if (provider === 'openai' && !userSettingsStore.settings.ai.baseUrl.trim()) {
-    userSettingsStore.settings.ai.baseUrl = 'https://api.openai.com/v1'
+  if (settings.ai.requiresProviderReselection && apiTokenInput.value === MASKED_TOKEN)
+    issues.push('检测到旧版 AI 提供商配置，请重新选择 DeepSeek 或 OpenAI 并重新输入 API Key')
+
+  if (
+    apiTokenInput.value === MASKED_TOKEN
+    && originalPersonalProvider.value
+    && personalProviderInput.value
+    && personalProviderInput.value !== originalPersonalProvider.value
+  ) {
+    issues.push('切换提供商时请重新输入对应 API Key')
   }
-  if (provider === 'deepseek' && !userSettingsStore.settings.ai.baseUrl.trim()) {
-    userSettingsStore.settings.ai.baseUrl = 'https://api.deepseek.com'
-  }
+
+  return issues
 }
 
 async function load() {
   try {
     await userSettingsStore.fetchMySettings()
-    syncTokenInput()
+    syncAiForm()
   }
   catch {}
 }
@@ -96,9 +154,7 @@ async function save() {
       note: userSettingsStore.settings.simulation.note,
     },
     ai: {
-      provider: userSettingsStore.settings.ai.provider,
-      baseUrl: userSettingsStore.settings.ai.baseUrl,
-      model: userSettingsStore.settings.ai.model,
+      provider: personalProviderInput.value || undefined,
       apiToken: apiTokenInput.value,
     },
     strategy: {
@@ -113,7 +169,7 @@ async function save() {
     return
   }
 
-  syncTokenInput()
+  syncAiForm()
   window.$message.success('个人设置已保存到你的账户配置')
 }
 
@@ -268,52 +324,74 @@ onMounted(() => {
         <n-grid-item :span="24" :l-span="14">
           <n-space vertical :size="16">
             <n-card title="个人 AI 配置">
-              <n-grid :cols="24" :x-gap="12" :y-gap="12" responsive="screen">
-                <n-grid-item :span="24" :m-span="12">
-                  <n-form-item label="提供商">
-                    <n-select
-                      v-model:value="userSettingsStore.settings.ai.provider"
-                      :options="providerOptions"
-                      :style="CONTROL_WIDTH_STYLE"
-                      @update:value="handleProviderChange"
-                    />
-                  </n-form-item>
-                </n-grid-item>
-                <n-grid-item :span="24" :m-span="12">
-                  <n-form-item label="模型">
+              <n-space vertical :size="12">
+                <n-alert :type="aiSourceAlertType">
+                  <template #header>
+                    当前生效来源
+                  </template>
+                  <n-space align="center" :size="8">
+                    <n-tag :type="currentAiSourceType" size="small">
+                      {{ currentAiSourceText }}
+                    </n-tag>
+                    <n-tag v-if="userSettingsStore.settings.ai.hasToken" type="success" size="small">
+                      已保存个人 Key
+                    </n-tag>
+                    <n-text depth="3">
+                      {{ aiSourceHintText }}
+                    </n-text>
+                  </n-space>
+                </n-alert>
+
+                <n-alert
+                  v-if="userSettingsStore.settings.ai.requiresProviderReselection"
+                  type="warning"
+                >
+                  检测到旧版 AI 提供商配置，请重新选择 DeepSeek 或 OpenAI，并重新输入对应的 API Key。
+                </n-alert>
+
+                <n-descriptions bordered :column="1" label-placement="left">
+                  <n-descriptions-item label="系统内置提供商">
+                    {{ formatProvider(userSettingsStore.settings.ai.systemDefault.provider) }}
+                  </n-descriptions-item>
+                  <n-descriptions-item label="系统内置模型">
+                    {{ userSettingsStore.settings.ai.systemDefault.model || '--' }}
+                  </n-descriptions-item>
+                  <n-descriptions-item label="系统内置 Base URL">
+                    <n-text depth="3">
+                      {{ userSettingsStore.settings.ai.systemDefault.baseUrl || '--' }}
+                    </n-text>
+                  </n-descriptions-item>
+                  <n-descriptions-item label="系统内置状态">
+                    <n-tag :type="systemDefaultStateType" size="small">
+                      {{ systemDefaultStateText }}
+                    </n-tag>
+                  </n-descriptions-item>
+                </n-descriptions>
+
+                <n-form-item label="个人提供商">
+                  <n-select
+                    v-model:value="personalProviderInput"
+                    :options="providerOptions"
+                    placeholder="选择你要使用的 AI 提供商"
+                    :style="CONTROL_WIDTH_STYLE"
+                  />
+                </n-form-item>
+
+                <n-form-item label="个人 API Key">
+                  <n-space vertical :size="8">
                     <n-input
-                      v-model:value="userSettingsStore.settings.ai.model"
-                      placeholder="例如：gpt-4o-mini / deepseek-chat"
+                      v-model:value="apiTokenInput"
+                      type="password"
+                      show-password-on="click"
+                      placeholder="输入你的个人 API Key；留空则回退系统内置 AI"
                       :style="CONTROL_WIDTH_STYLE"
                     />
-                  </n-form-item>
-                </n-grid-item>
-                <n-grid-item :span="24" :m-span="12">
-                  <n-form-item label="Base URL">
-                    <n-input
-                      v-model:value="userSettingsStore.settings.ai.baseUrl"
-                      placeholder="例如：https://api.openai.com/v1"
-                      :style="CONTROL_WIDTH_STYLE"
-                    />
-                  </n-form-item>
-                </n-grid-item>
-                <n-grid-item :span="24" :m-span="12">
-                  <n-form-item label="API Token">
-                    <n-space vertical :size="8">
-                      <n-input
-                        v-model:value="apiTokenInput"
-                        type="password"
-                        show-password-on="click"
-                        placeholder="输入新 Token 以更新"
-                        :style="CONTROL_WIDTH_STYLE"
-                      />
-                      <n-text depth="3">
-                        留空将清除 Token；保持 ****** 表示不修改。
-                      </n-text>
-                    </n-space>
-                  </n-form-item>
-                </n-grid-item>
-              </n-grid>
+                    <n-text depth="3">
+                      保持 `******` 表示不修改当前 Key；清空后保存会删除个人 Key，并立即回退到系统内置 AI。
+                    </n-text>
+                  </n-space>
+                </n-form-item>
+              </n-space>
             </n-card>
 
             <n-card title="保存前校验">

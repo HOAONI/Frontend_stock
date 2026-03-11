@@ -8,7 +8,7 @@ function isRunningStatus(status: TaskInfo['status']): boolean {
 }
 
 function isTerminalStatus(status: TaskInfo['status']): status is TaskTerminalStatus {
-  return status === 'completed' || status === 'failed'
+  return status === 'completed' || status === 'failed' || status === 'cancelled'
 }
 
 function resolveRunningSortTime(task: TaskInfo): number {

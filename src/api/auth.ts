@@ -52,6 +52,8 @@ export async function register(payload: RegisterRequest): Promise<void> {
     password: payload.password,
     confirmPassword: payload.confirmPassword,
     displayName: payload.displayName,
+    accountType: payload.accountType,
+    adminSecret: payload.adminSecret,
   })
 }
 
