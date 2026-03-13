@@ -52,7 +52,9 @@ watch(() => [show.value, props.detail?.detail.task.taskId], ([visible]) => {
 
               <n-descriptions bordered label-placement="top" size="small" :column="2">
                 <n-descriptions-item v-for="item in props.detail.fields" :key="item.key" :label="item.label">
-                  <span class="scheduler-break-all">{{ item.value }}</span>
+                  <n-ellipsis :tooltip="true">
+                    {{ item.value }}
+                  </n-ellipsis>
                 </n-descriptions-item>
               </n-descriptions>
             </n-space>
@@ -81,14 +83,16 @@ watch(() => [show.value, props.detail?.detail.task.taskId], ([visible]) => {
           </n-tab-pane>
 
           <n-tab-pane name="payload" tab="载荷快照">
-            <n-grid :cols="24" :x-gap="12" :y-gap="12" responsive="screen">
-              <n-grid-item v-for="item in props.detail.payloadCards" :key="item.key" :span="24" :l-span="12">
+            <n-grid cols="1 l:2" responsive="screen" :x-gap="12" :y-gap="12">
+              <n-grid-item v-for="item in props.detail.payloadCards" :key="item.key">
                 <n-card embedded size="small" :bordered="false">
                   <n-space vertical :size="10">
                     <n-text strong>
                       {{ item.title }}
                     </n-text>
-                    <pre class="scheduler-json-block">{{ item.value }}</pre>
+                    <n-code word-wrap>
+                      {{ item.value }}
+                    </n-code>
                   </n-space>
                 </n-card>
               </n-grid-item>
@@ -99,18 +103,3 @@ watch(() => [show.value, props.detail?.detail.task.taskId], ([visible]) => {
     </n-drawer-content>
   </n-drawer>
 </template>
-
-<style scoped>
-.scheduler-break-all {
-  word-break: break-all;
-}
-
-.scheduler-json-block {
-  margin: 0;
-  max-height: 360px;
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
-  line-height: 1.6;
-}
-</style>

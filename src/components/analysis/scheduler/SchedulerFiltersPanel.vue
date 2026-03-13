@@ -32,7 +32,7 @@ function normalizeDateRange(value: number[] | null): [number, number] | null {
 </script>
 
 <template>
-  <n-card :bordered="false" size="small" class="scheduler-panel-card">
+  <n-card :bordered="false" :segmented="{ content: true }" size="small">
     <n-space vertical :size="16">
       <n-flex justify="space-between" align="start" :wrap="true" :size="12">
         <n-space vertical :size="6">
@@ -83,7 +83,7 @@ function normalizeDateRange(value: number[] | null): [number, number] | null {
             />
           </n-form-item-gi>
 
-          <n-form-item-gi v-if="props.isAdmin" label="提交用户" :span="24" :m-span="12" :l-span="8">
+          <n-form-item-gi v-if="props.isAdmin" label="提交用户" :span="24" :m-span="12" :l-span="10">
             <n-input
               :value="filters.username"
               clearable
@@ -92,12 +92,11 @@ function normalizeDateRange(value: number[] | null): [number, number] | null {
             />
           </n-form-item-gi>
 
-          <n-form-item-gi label="时间范围" :span="24" :m-span="12" :l-span="16">
+          <n-form-item-gi label="时间范围" :span="24" :m-span="12" :l-span="14">
             <n-date-picker
               type="daterange"
               clearable
               :value="filters.dateRange"
-              class="w-full"
               @update:value="patchFilters({ dateRange: normalizeDateRange($event) })"
             />
           </n-form-item-gi>
@@ -113,20 +112,14 @@ function normalizeDateRange(value: number[] | null): [number, number] | null {
         </n-grid>
       </n-form>
 
-      <n-space :size="8" :wrap="true">
+      <n-flex :size="[8, 8]" :wrap="true">
         <n-button type="primary" @click="emit('search')">
           查询
         </n-button>
         <n-button @click="emit('reset')">
           重置
         </n-button>
-      </n-space>
+      </n-flex>
     </n-space>
   </n-card>
 </template>
-
-<style scoped>
-.scheduler-panel-card {
-  height: 100%;
-}
-</style>

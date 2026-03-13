@@ -7,7 +7,7 @@ const props = defineProps<{
 </script>
 
 <template>
-  <n-card :bordered="false" size="small" class="scheduler-panel-card">
+  <n-card :bordered="false" :segmented="{ content: true }" size="small">
     <n-space vertical :size="16">
       <n-flex justify="space-between" align="start" :wrap="true" :size="12">
         <n-space vertical :size="6">
@@ -24,29 +24,29 @@ const props = defineProps<{
       </n-flex>
 
       <n-text depth="3">
-        配置快照随健康检查更新，可直接对照 Worker 轮询、超时和心跳参数定位调度异常。
+        健康检查同步刷新当前生效策略，便于快速确认调度阈值和轮询参数。
       </n-text>
 
-      <n-grid :cols="24" :x-gap="12" :y-gap="12" responsive="screen">
-        <n-grid-item v-for="item in props.items" :key="item.key" :span="24" :m-span="12">
+      <n-grid cols="1 s:2" responsive="screen" :x-gap="12" :y-gap="12">
+        <n-grid-item v-for="item in props.items" :key="item.key">
           <n-card embedded size="small" :bordered="false">
             <n-space vertical :size="10">
-              <n-descriptions label-placement="top" size="small" :column="1">
-                <n-descriptions-item label="配置项">
-                  <n-text strong>
-                    {{ item.title }}
-                  </n-text>
-                </n-descriptions-item>
-                <n-descriptions-item label="当前值">
-                  <span class="scheduler-break-all">{{ item.value }}</span>
-                </n-descriptions-item>
-              </n-descriptions>
+              <n-flex justify="space-between" align="center" :wrap="true" :size="8">
+                <n-text strong>
+                  {{ item.title }}
+                </n-text>
+                <n-tag round size="small">
+                  {{ item.value }}
+                </n-tag>
+              </n-flex>
+
               <n-text depth="3">
                 {{ item.description }}
               </n-text>
-              <n-code word-wrap>
+
+              <n-text depth="3">
                 {{ item.envKey }}
-              </n-code>
+              </n-text>
             </n-space>
           </n-card>
         </n-grid-item>
@@ -54,13 +54,3 @@ const props = defineProps<{
     </n-space>
   </n-card>
 </template>
-
-<style scoped>
-.scheduler-panel-card {
-  height: 100%;
-}
-
-.scheduler-break-all {
-  word-break: break-all;
-}
-</style>

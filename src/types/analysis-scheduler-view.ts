@@ -34,6 +34,21 @@ export interface SchedulerMetricItem {
   type: SchedulerTone
 }
 
+export interface SchedulerActivityItem {
+  key: string
+  title: string
+  content: string
+  time: string
+  type: Exclude<SchedulerTone, 'primary'>
+}
+
+export interface SchedulerAlertItem {
+  key: string
+  title: string
+  content: string
+  type: Exclude<SchedulerTone, 'primary'>
+}
+
 export interface SchedulerHealthItem {
   key: string
   label: string
@@ -94,6 +109,41 @@ export interface SchedulerTaskCardView {
   message: string
   messageType: Exclude<SchedulerTone, 'default' | 'primary'>
   progress: number | null
+}
+
+export interface SchedulerSpotlightTaskItem {
+  key: string
+  span: number
+  sSpan: number
+  lSpan: number
+  card: SchedulerTaskCardView
+  selected: boolean
+}
+
+export interface SchedulerTaskTableRow {
+  key: string
+  taskId: string
+  stockCode: string
+  reportType: string
+  statusTag: SchedulerTagItem
+  executionModeLabel: string
+  ownerLabel: string
+  priority: number
+  progress: number | null
+  progressLabel: string
+  createdAt: string
+  message: string
+  messageType: Exclude<SchedulerTone, 'default' | 'primary'>
+  selected: boolean
+}
+
+export interface SchedulerQueuePreviewItem {
+  key: string
+  stockCode: string
+  statusTag: SchedulerTagItem
+  priority: number
+  progressLabel: string
+  ownerLabel: string
 }
 
 export interface SchedulerDetailView {

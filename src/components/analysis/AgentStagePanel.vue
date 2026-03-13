@@ -7,10 +7,6 @@ const props = defineProps<{
 
 const activeCode = ref<string>('data')
 
-const activeStage = computed(() => {
-  return props.stages.find(item => item.code === activeCode.value) || props.stages[0] || null
-})
-
 function statusType(status: AgentStageItem['status']) {
   if (status === 'done')
     return 'success'
@@ -25,6 +21,14 @@ function statusText(status: AgentStageItem['status']) {
   if (status === 'failed')
     return '失败'
   return '等待'
+}
+
+function summaryType(status: AgentStageItem['status']) {
+  if (status === 'done')
+    return 'success'
+  if (status === 'failed')
+    return 'error'
+  return 'warning'
 }
 
 function pretty(value: unknown): string {
@@ -49,53 +53,55 @@ watch(() => props.stages, (list) => {
 </script>
 
 <template>
-  <n-space vertical :size="12">
-    <n-grid :cols="24" :x-gap="8" :y-gap="8" responsive="screen">
-      <n-grid-item v-for="stage in stages" :key="stage.code" :span="12" :l-span="6">
-        <n-card
-          size="small"
-          class="cursor-pointer"
-          :class="activeCode === stage.code ? 'border border-solid border-primary' : ''"
-          @click="activeCode = stage.code"
-        >
-          <n-space vertical :size="6">
-            <n-space justify="space-between" align="center">
-              <n-text strong>
-                {{ stage.title }}
-              </n-text>
-              <n-tag size="small" :type="statusType(stage.status)">
-                {{ statusText(stage.status) }}
-              </n-tag>
-            </n-space>
+  <n-empty v-if="!props.stages.length" description="暂无阶段详情" />
+
+  <n-tabs v-else v-model:value="activeCode" type="segment" animated>
+    <n-tab-pane
+      v-for="stage in props.stages"
+      :key="stage.code"
+      :name="stage.code"
+      :tab="stage.title"
+    >
+      <n-space vertical :size="12">
+        <n-flex justify="space-between" align="start" :wrap="true" :size="12">
+          <n-space :size="8" align="center" :wrap="true">
+            <n-tag round size="small" :type="statusType(stage.status)">
+              {{ statusText(stage.status) }}
+            </n-tag>
             <n-text depth="3">
-              {{ stage.summary || '--' }}
-            </n-text>
-            <n-text depth="3">
-              耗时：{{ stage.durationMs != null ? `${stage.durationMs}ms` : '--' }}
+              耗时：{{ stage.durationMs != null ? `${stage.durationMs} ms` : '--' }}
             </n-text>
           </n-space>
-        </n-card>
-      </n-grid-item>
-    </n-grid>
+          <n-text depth="3">
+            {{ stage.title }}
+          </n-text>
+        </n-flex>
 
-    <n-card v-if="activeStage" size="small" title="阶段详情">
-      <n-space vertical :size="8">
-        <n-alert v-if="activeStage.errorMessage" type="error">
-          {{ activeStage.errorMessage }}
+        <n-alert :type="summaryType(stage.status)" :show-icon="false">
+          {{ stage.summary || '--' }}
         </n-alert>
-        <n-grid :cols="24" :x-gap="12" :y-gap="12" responsive="screen">
-          <n-grid-item :span="24" :l-span="12">
-            <n-card size="small" title="输入摘要">
-              <pre class="whitespace-pre-wrap break-all">{{ pretty(activeStage.input) }}</pre>
+
+        <n-alert v-if="stage.errorMessage" type="error" :show-icon="false">
+          {{ stage.errorMessage }}
+        </n-alert>
+
+        <n-grid cols="1 l:2" responsive="screen" :x-gap="12" :y-gap="12">
+          <n-grid-item>
+            <n-card embedded size="small" :bordered="false" title="输入摘要">
+              <n-code word-wrap>
+                {{ pretty(stage.input) }}
+              </n-code>
             </n-card>
           </n-grid-item>
-          <n-grid-item :span="24" :l-span="12">
-            <n-card size="small" title="输出摘要">
-              <pre class="whitespace-pre-wrap break-all">{{ pretty(activeStage.output) }}</pre>
+          <n-grid-item>
+            <n-card embedded size="small" :bordered="false" title="输出摘要">
+              <n-code word-wrap>
+                {{ pretty(stage.output) }}
+              </n-code>
             </n-card>
           </n-grid-item>
         </n-grid>
       </n-space>
-    </n-card>
-  </n-space>
+    </n-tab-pane>
+  </n-tabs>
 </template>

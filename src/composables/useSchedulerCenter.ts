@@ -22,6 +22,8 @@ import type {
 import type { AgentStageItem } from '@/types/agent-stages'
 import type {
   SchedulerActionState,
+  SchedulerActivityItem,
+  SchedulerAlertItem,
   SchedulerDetailView,
   SchedulerFieldItem,
   SchedulerFilterForm,
@@ -30,9 +32,12 @@ import type {
   SchedulerMetricItem,
   SchedulerOption,
   SchedulerPolicyItem,
+  SchedulerQueuePreviewItem,
   SchedulerSelectedTaskView,
+  SchedulerSpotlightTaskItem,
   SchedulerTagItem,
   SchedulerTaskCardView,
+  SchedulerTaskTableRow,
   SchedulerTimelineItem,
 } from '@/types/analysis-scheduler-view'
 import { getSystemConfigFieldDisplay } from '@/utils/system-config-display'
@@ -293,6 +298,18 @@ function buildTimelineFields(task: SchedulerTaskItem): SchedulerFieldItem[] {
   ]
 }
 
+function timelineType(status: SchedulerTaskStatus): Exclude<SchedulerTagItem['type'], 'primary'> {
+  if (status === 'completed')
+    return 'success'
+  if (status === 'failed')
+    return 'error'
+  if (status === 'processing')
+    return 'info'
+  if (status === 'pending')
+    return 'warning'
+  return 'default'
+}
+
 export function useSchedulerCenter() {
   const sessionStore = useSessionStore()
 
@@ -392,6 +409,178 @@ export function useSchedulerCenter() {
     ]
   })
 
+  const rowStatusCounts = computed(() => {
+    return rows.value.reduce((acc, task) => {
+      if (task.status === 'pending')
+        acc.pending += 1
+      if (task.status === 'processing')
+        acc.processing += 1
+      if (task.status === 'failed')
+        acc.failed += 1
+      if (task.isStale)
+        acc.stale += 1
+      return acc
+    }, {
+      pending: 0,
+      processing: 0,
+      failed: 0,
+      stale: 0,
+    })
+  })
+
+  const overviewSummaryCards = computed<SchedulerMetricItem[]>(() => {
+    const data = overview.value
+    const abnormalCount = data ? data.failedCount + data.staleProcessingCount : '--'
+    return [
+      {
+        key: 'running',
+        label: '运行任务数',
+        value: data ? data.processingCount : '--',
+        type: data && data.processingCount > 0 ? 'info' : 'default',
+        hint: '当前已被 Worker 锁定并正在执行中的任务数。',
+      },
+      {
+        key: 'abnormal',
+        label: '异常任务数',
+        value: abnormalCount,
+        type: data && Number(abnormalCount) > 0 ? 'error' : 'success',
+        hint: '失败任务与疑似卡死任务的总和。',
+      },
+      {
+        key: 'queue-depth',
+        label: '队列压力',
+        value: data ? data.queueDepth : '--',
+        type: data && data.queueDepth > 0 ? 'warning' : 'success',
+        hint: '当前队列深度，越高说明待消化任务越多。',
+      },
+      {
+        key: 'success-rate',
+        label: '24h 成功率',
+        value: data?.successRate24h == null ? '--' : `${data.successRate24h}%`,
+        type: data && (data.successRate24h ?? 0) < 80 ? 'warning' : 'success',
+        hint: '最近 24 小时完成任务占完成加失败任务的比例。',
+      },
+    ]
+  })
+
+  const currentFocusCards = computed<SchedulerMetricItem[]>(() => [
+    {
+      key: 'pending',
+      label: '待处理',
+      value: rowStatusCounts.value.pending,
+      type: rowStatusCounts.value.pending > 0 ? 'warning' : 'success',
+      hint: '当前列表中仍在等待出队执行的任务。',
+    },
+    {
+      key: 'processing',
+      label: '处理中',
+      value: rowStatusCounts.value.processing,
+      type: rowStatusCounts.value.processing > 0 ? 'info' : 'default',
+      hint: '当前页中正在由 Worker 处理的任务。',
+    },
+    {
+      key: 'failed',
+      label: '需重试',
+      value: rowStatusCounts.value.failed,
+      type: rowStatusCounts.value.failed > 0 ? 'error' : 'success',
+      hint: '失败后可以人工重试或重跑的任务。',
+    },
+    {
+      key: 'stale',
+      label: '疑似卡死',
+      value: rowStatusCounts.value.stale,
+      type: rowStatusCounts.value.stale > 0 ? 'error' : 'success',
+      hint: '处理时长超阈值，建议优先排查链路。',
+    },
+  ])
+
+  const queueHealthCards = computed<SchedulerMetricItem[]>(() => {
+    const data = overview.value
+    return [
+      {
+        key: 'queue-depth',
+        label: '队列深度',
+        value: data ? data.queueDepth : '--',
+        type: data && data.queueDepth > 0 ? 'warning' : 'success',
+        hint: '当前待执行与处理中任务构成的整体压力。',
+      },
+      {
+        key: 'oldest-wait',
+        label: '最老等待',
+        value: data ? formatDurationMs(data.oldestPendingWaitMs) : '--',
+        type: data && data.oldestPendingWaitMs > 10 * 60 * 1000 ? 'warning' : 'default',
+        hint: '最长时间仍未被消费的待执行任务等待时长。',
+      },
+      {
+        key: 'completed24h',
+        label: '24h 完成',
+        value: data ? data.completed24h : '--',
+        type: 'success',
+        hint: '最近 24 小时已完成任务数。',
+      },
+      {
+        key: 'failed24h',
+        label: '24h 失败',
+        value: data ? data.failed24h : '--',
+        type: data && data.failed24h > 0 ? 'error' : 'success',
+        hint: '最近 24 小时失败任务数。',
+      },
+    ]
+  })
+
+  const priorityAlerts = computed<SchedulerAlertItem[]>(() => {
+    const overviewData = overview.value
+    const healthData = health.value
+
+    if (!overviewData || !healthData) {
+      return [
+        { key: 'loading-worker', title: '正在同步 Worker 状态', content: '系统正在拉取最新健康检查结果。', type: 'info' },
+        { key: 'loading-queue', title: '正在同步队列压力', content: '系统正在拉取最新队列概览与任务摘要。', type: 'info' },
+        { key: 'loading-policy', title: '正在同步策略快照', content: '策略阈值和运行参数稍后可见。', type: 'default' },
+      ]
+    }
+
+    const alerts: SchedulerAlertItem[] = [
+      {
+        key: 'worker',
+        title: healthData.workerHealthy ? 'Worker 心跳正常' : 'Worker 心跳异常',
+        content: healthData.workerHealthy
+          ? `最新心跳 ${formatDateTime(healthData.workerHeartbeat?.lastSeenAt)}，当前为 ${workerModeLabel(healthData.workerMode)}。`
+          : 'Worker 心跳已超时，任务执行链路可能已经停滞。',
+        type: healthData.workerHealthy ? 'success' : 'error',
+      },
+      {
+        key: 'stale',
+        title: overviewData.staleProcessingCount > 0 ? `${overviewData.staleProcessingCount} 条任务疑似卡死` : '无异常处理中任务',
+        content: overviewData.staleProcessingCount > 0
+          ? '建议优先检查 Worker 心跳、轮询参数与任务执行阶段。'
+          : '当前未发现超过阈值的处理中任务。',
+        type: overviewData.staleProcessingCount > 0 ? 'error' : 'success',
+      },
+    ]
+
+    if (overviewData.failedCount > 0) {
+      alerts.push({
+        key: 'failed',
+        title: `${overviewData.failedCount} 条失败任务待处理`,
+        content: '可以直接切换到失败任务筛选，集中执行重试或重跑。',
+        type: 'warning',
+      })
+    }
+    else {
+      alerts.push({
+        key: 'pending',
+        title: overviewData.pendingCount > 0 ? `${overviewData.pendingCount} 条任务等待执行` : '队列压力较低',
+        content: overviewData.pendingCount > 0
+          ? `最老等待 ${formatDurationMs(overviewData.oldestPendingWaitMs)}。`
+          : '当前待执行积压较少，可以直接关注新增任务。',
+        type: overviewData.pendingCount > 0 ? 'info' : 'success',
+      })
+    }
+
+    return alerts
+  })
+
   const healthSummary = computed(() => {
     const data = health.value
     if (!data)
@@ -432,14 +621,6 @@ export function useSchedulerCenter() {
         label: 'Worker 心跳',
         ok: data.workerHealthy,
         hint: data.workerHealthy ? `${workerModeLabel(data.workerMode)} Worker 正常上报心跳` : 'Worker 心跳已超时，可能未启动或已卡死。',
-      },
-      {
-        key: 'queue',
-        label: '队列健康',
-        ok: (data.queueMetrics.staleProcessingCount || 0) === 0,
-        hint: data.queueMetrics.staleProcessingCount > 0
-          ? `存在 ${data.queueMetrics.staleProcessingCount} 条疑似卡死任务`
-          : '当前未发现疑似卡死任务。',
       },
     ]
   })
@@ -517,6 +698,136 @@ export function useSchedulerCenter() {
       messageType: taskMessageTone(task),
       progress: task.status === 'processing' || task.status === 'completed' ? progressPercent(task.progress) : null,
     }))
+  })
+
+  const spotlightTaskCards = computed<SchedulerSpotlightTaskItem[]>(() => {
+    const spans = [
+      { span: 1, sSpan: 2, lSpan: 6 },
+      { span: 1, sSpan: 1, lSpan: 3 },
+      { span: 1, sSpan: 1, lSpan: 3 },
+      { span: 1, sSpan: 2, lSpan: 6 },
+    ]
+
+    return taskCards.value.slice(0, 4).map((card, index) => ({
+      key: card.task.taskId,
+      span: spans[index]?.span ?? 1,
+      sSpan: spans[index]?.sSpan ?? 1,
+      lSpan: spans[index]?.lSpan ?? 3,
+      card,
+      selected: selectedTask.value?.taskId === card.task.taskId,
+    }))
+  })
+
+  const activityItems = computed<SchedulerActivityItem[]>(() => {
+    if (selectedTask.value) {
+      const task = selectedTask.value
+      const items: SchedulerActivityItem[] = [
+        {
+          key: `${task.taskId}-created`,
+          title: '任务提交',
+          content: `${resolveOwnerLabel(task)} 提交了 ${task.stockCode} 的 ${task.reportType || 'analysis'} 任务`,
+          time: formatDateTime(task.createdAt),
+          type: 'info',
+        },
+      ]
+
+      if (task.startedAt) {
+        items.push({
+          key: `${task.taskId}-started`,
+          title: '开始执行',
+          content: `${executionModeLabel(task.executionMode)} 模式已开始处理任务`,
+          time: formatDateTime(task.startedAt),
+          type: 'warning',
+        })
+      }
+
+      if (task.completedAt) {
+        items.push({
+          key: `${task.taskId}-finished`,
+          title: task.status === 'completed' ? '执行完成' : task.status === 'cancelled' ? '任务取消' : '执行结束',
+          content: taskMessage(task),
+          time: formatDateTime(task.completedAt),
+          type: timelineType(task.status),
+        })
+      }
+      else if (task.status === 'failed') {
+        items.push({
+          key: `${task.taskId}-failed`,
+          title: '执行失败',
+          content: taskMessage(task),
+          time: formatDateTime(task.startedAt || task.createdAt),
+          type: 'error',
+        })
+      }
+
+      if (task.isStale) {
+        items.push({
+          key: `${task.taskId}-stale`,
+          title: '异常告警',
+          content: '任务处理时长超过阈值，建议优先排查 Worker 心跳和任务链路。',
+          time: formatDateTime(task.startedAt || task.createdAt),
+          type: 'error',
+        })
+      }
+
+      return items
+    }
+
+    return rows.value.slice(0, 5).map(task => ({
+      key: task.taskId,
+      title: `${task.stockCode} · ${statusLabel(task.status)}`,
+      content: taskMessage(task),
+      time: formatDateTime(task.completedAt || task.startedAt || task.createdAt),
+      type: timelineType(task.status),
+    }))
+  })
+
+  const taskTableRows = computed<SchedulerTaskTableRow[]>(() => {
+    return rows.value.map(task => ({
+      key: task.taskId,
+      taskId: task.taskId,
+      stockCode: task.stockCode,
+      reportType: task.reportType || 'analysis',
+      statusTag: { key: 'status', label: statusLabel(task.status), type: statusTone(task.status) },
+      executionModeLabel: executionModeLabel(task.executionMode),
+      ownerLabel: resolveOwnerLabel(task),
+      priority: task.priority,
+      progress: task.status === 'processing' || task.status === 'completed' ? progressPercent(task.progress) : null,
+      progressLabel: progressLabel(task),
+      createdAt: formatDateTime(task.createdAt),
+      message: taskMessage(task),
+      messageType: taskMessageTone(task),
+      selected: selectedTask.value?.taskId === task.taskId,
+    }))
+  })
+
+  const queuePreviewItems = computed<SchedulerQueuePreviewItem[]>(() => {
+    const statusRank: Record<SchedulerTaskStatus, number> = {
+      pending: 0,
+      processing: 1,
+      failed: 2,
+      completed: 3,
+      cancelled: 4,
+    }
+
+    return [...rows.value]
+      .sort((left, right) => {
+        const statusDiff = statusRank[left.status] - statusRank[right.status]
+        if (statusDiff !== 0)
+          return statusDiff
+        if (left.priority !== right.priority)
+          return left.priority - right.priority
+        return new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+      })
+      .slice(0, 4)
+      .map(task => ({
+        key: task.taskId,
+        stockCode: task.stockCode,
+        statusTag: { key: 'status', label: statusLabel(task.status), type: statusTone(task.status) },
+        priority: task.priority,
+        progressLabel: progressLabel(task),
+        ownerLabel: resolveOwnerLabel(task),
+      }))
   })
 
   const detailView = computed<SchedulerDetailView | null>(() => {
@@ -653,6 +964,24 @@ export function useSchedulerCenter() {
   }
 
   async function searchTasks() {
+    await refreshAll(true)
+  }
+
+  async function focusFailedTasks() {
+    filters.value = {
+      ...filters.value,
+      status: 'failed',
+      staleOnly: false,
+    }
+    await refreshAll(true)
+  }
+
+  async function focusStaleTasks() {
+    filters.value = {
+      ...filters.value,
+      status: null,
+      staleOnly: true,
+    }
     await refreshAll(true)
   }
 
@@ -826,6 +1155,8 @@ export function useSchedulerCenter() {
     detailVisible,
     executionModeOptions: EXECUTION_MODE_OPTIONS,
     filters,
+    focusFailedTasks,
+    focusStaleTasks,
     handleCancel,
     handlePageChange,
     handleRerun,
@@ -837,15 +1168,20 @@ export function useSchedulerCenter() {
     isAdmin,
     limit,
     loading,
+    currentFocusCards,
     openDetail,
     openPriorityModal,
     overviewCards,
+    overviewSummaryCards,
     page,
     pageCount,
     policyItems,
+    priorityAlerts,
     priorityDraft,
     prioritySaving,
     priorityVisible,
+    queueHealthCards,
+    queuePreviewItems,
     queueSummary,
     refreshAll,
     resetFilters,
@@ -859,8 +1195,11 @@ export function useSchedulerCenter() {
     showPriorityAction: computed(() => isAdmin.value),
     statusOptions: STATUS_OPTIONS,
     submitPriority,
+    spotlightTaskCards,
     taskCards,
+    taskTableRows,
     total,
+    activityItems,
     clearSelection,
     closePriorityModal,
   }
