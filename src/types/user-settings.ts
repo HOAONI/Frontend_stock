@@ -1,5 +1,5 @@
-export type AiProvider = 'gemini' | 'anthropic' | 'openai' | 'deepseek' | 'custom'
-export type PersonalAiProvider = 'openai' | 'deepseek'
+export type AiProvider = 'gemini' | 'anthropic' | 'openai' | 'deepseek' | 'custom' | 'siliconflow'
+export type PersonalAiProvider = 'openai' | 'deepseek' | 'siliconflow'
 
 export interface UserAiRuntimeMeta {
   provider: AiProvider | ''
@@ -21,6 +21,7 @@ export interface UserSimulationSettings {
 
 export interface UserAiSettings {
   personalProvider: PersonalAiProvider | ''
+  personalModel: string
   provider: AiProvider | ''
   baseUrl: string
   model: string
@@ -29,6 +30,8 @@ export interface UserAiSettings {
   source: 'system' | 'personal'
   hasSystemToken: boolean
   requiresProviderReselection: boolean
+  personalBindingAvailable: boolean
+  personalBindingIssue: string
   systemDefault: UserAiSystemRuntimeMeta
   effective: UserAiRuntimeMeta
 }
@@ -50,6 +53,7 @@ export interface UpdateUserSettingsRequest {
   simulation?: Partial<UserSimulationSettings>
   ai?: {
     provider?: PersonalAiProvider
+    model?: string
     apiToken?: string
   }
   strategy?: Partial<UserStrategySettings>
@@ -65,6 +69,7 @@ export function createDefaultUserSettings(): UserSettingsResponse {
     },
     ai: {
       personalProvider: '',
+      personalModel: '',
       provider: '',
       baseUrl: '',
       model: '',
@@ -73,6 +78,8 @@ export function createDefaultUserSettings(): UserSettingsResponse {
       source: 'system',
       hasSystemToken: false,
       requiresProviderReselection: false,
+      personalBindingAvailable: true,
+      personalBindingIssue: '',
       systemDefault: {
         provider: '',
         baseUrl: '',

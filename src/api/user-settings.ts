@@ -27,6 +27,8 @@ export async function updateMyUserSettings(payload: UpdateUserSettingsRequest): 
     const ai: Record<string, unknown> = {}
     if (payload.ai.provider !== undefined)
       ai.provider = payload.ai.provider
+    if (payload.ai.model !== undefined)
+      ai.model = payload.ai.model
     if (payload.ai.apiToken !== undefined)
       ai.apiToken = payload.ai.apiToken
     body.ai = ai

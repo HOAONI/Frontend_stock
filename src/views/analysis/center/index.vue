@@ -5,7 +5,7 @@ import { useTaskStream } from '@/composables/useTaskStream'
 import { CARD_DENSITY, DASHBOARD_LAYOUT, GRID_GAP, SPACING } from '@/constants/design-tokens'
 import { resolveAgentStages } from '@/services/analysis-service'
 import { useBrokerAccountStore } from '@/store'
-import type { AnalysisReport, HistoryItem, NewsIntelItem, TaskInfo } from '@/types/analysis'
+import type { AnalysisReport, HistoryItem, NewsIntelItem, TaskInfo, TaskListResponse } from '@/types/analysis'
 import type { AgentStageItem } from '@/types/agent-stages'
 import { formatDateTime, validateStockCode } from '@/utils/stock'
 import { useThemeVars } from 'naive-ui'
@@ -28,10 +28,16 @@ const executionModeOptions = [
 ]
 
 const historyItems = ref<HistoryItem[]>([])
-const historyTotal = ref(0)
+const historyListTotal = ref(0)
 const historyPage = ref(1)
 const historyLimit = ref(5)
 const historyLoading = ref(false)
+const taskStats = ref<Pick<TaskListResponse, 'completed' | 'failed' | 'cancelled'>>({
+  completed: 0,
+  failed: 0,
+  cancelled: 0,
+})
+const historyOverviewTotal = computed(() => taskStats.value.completed + taskStats.value.failed)
 
 const selectedQueryId = ref('')
 const reportLoading = ref(false)
@@ -139,7 +145,7 @@ function resolveTaskId(queryId: string): string | null {
 }
 
 interface RefreshTaskOptions {
-  reason?: 'init' | 'manual' | 'submit' | 'stream_connected' | 'poll_fallback'
+  reason?: 'init' | 'manual' | 'submit' | 'stream_connected' | 'stream_completed' | 'stream_terminal' | 'poll_fallback'
   silent?: boolean
 }
 
@@ -151,6 +157,11 @@ async function refreshTasks(options: RefreshTaskOptions = {}) {
   try {
     const data = await getTaskList(undefined, 100)
     reconcileFromSnapshot(data.tasks)
+    taskStats.value = {
+      completed: data.completed,
+      failed: data.failed,
+      cancelled: data.cancelled,
+    }
   }
   catch {
     if (!options.silent)
@@ -180,13 +191,18 @@ const { isConnected } = useTaskStream({
   onTaskStarted: handleEventTask,
   onTaskCompleted: async (task) => {
     handleEventTask(task)
-    await refreshHistory(true)
+    await Promise.all([
+      refreshHistory(true),
+      refreshTasks({ reason: 'stream_completed', silent: true }),
+    ])
   },
   onTaskFailed: (task) => {
     handleEventTask(task)
+    void refreshTasks({ reason: 'stream_terminal', silent: true })
   },
   onTaskCancelled: (task) => {
     handleEventTask(task)
+    void refreshTasks({ reason: 'stream_terminal', silent: true })
   },
   onError: () => {
     const now = Date.now()
@@ -320,9 +336,6 @@ const recentResultItems = computed<RecentResultDisplayItem[]>(() => {
 })
 
 const analysisOverviewCards = computed<AnalysisOverviewCard[]>(() => {
-  const completedCount = filteredRecentTasks.value.filter(task => task.status === 'completed').length
-  const failedCount = filteredRecentTasks.value.filter(task => task.status === 'failed').length
-
   return [
     {
       key: 'running',
@@ -332,20 +345,20 @@ const analysisOverviewCards = computed<AnalysisOverviewCard[]>(() => {
     },
     {
       key: 'completed',
-      label: '最近完成',
-      value: completedCount,
+      label: '成功总数',
+      value: taskStats.value.completed,
       type: 'success',
     },
     {
       key: 'failed',
-      label: '最近失败',
-      value: failedCount,
-      type: failedCount > 0 ? 'error' : 'default',
+      label: '失败总数',
+      value: taskStats.value.failed,
+      type: taskStats.value.failed > 0 ? 'error' : 'default',
     },
     {
       key: 'history',
       label: '历史总数',
-      value: historyTotal.value,
+      value: historyOverviewTotal.value,
       type: 'warning',
     },
   ]
@@ -457,7 +470,7 @@ async function refreshHistory(resetPage = false) {
       limit: historyLimit.value,
     })
     historyItems.value = result.items
-    historyTotal.value = result.total
+    historyListTotal.value = result.total
 
     if (!selectedQueryId.value && result.items.length > 0)
       await loadReport(result.items[0].queryId)
@@ -959,7 +972,7 @@ onUnmounted(() => {
         </n-spin>
         <n-pagination
           :page="historyPage"
-          :item-count="historyTotal"
+          :item-count="historyListTotal"
           :page-size="historyLimit"
           @update:page="(page) => { historyPage = page; refreshHistory(); }"
         />

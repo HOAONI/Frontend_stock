@@ -73,6 +73,9 @@ export interface TaskListResponse {
   total: number
   pending: number
   processing: number
+  completed: number
+  failed: number
+  cancelled: number
   tasks: TaskInfo[]
 }
 

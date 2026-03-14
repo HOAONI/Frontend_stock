@@ -25,6 +25,7 @@ import type {
   AgentBacktestDailyStep,
   AgentBacktestDetailResponse,
   AgentBacktestHistoryItem,
+  AgentBacktestLlmMeta,
   AgentBacktestTradeItem,
 } from '@/types/agent-backtest'
 import type {
@@ -71,6 +72,14 @@ const AGENT_ACTION_LABELS: Record<string, string> = {
   sell: '卖出',
   hold: '持有',
   none: '无',
+}
+const AGENT_LLM_PROVIDER_LABELS: Record<string, string> = {
+  gemini: 'Gemini',
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
+  deepseek: 'DeepSeek',
+  siliconflow: 'SiliconFlow',
+  custom: '自定义兼容接口',
 }
 
 const mode = ref<BacktestMode>('strategy')
@@ -312,6 +321,42 @@ function formatExecutionPayload(payload: Record<string, unknown> | null | undefi
   const action = formatAgentAction(payload?.action ?? 'none')
   const pending = formatAgentAction(payload?.pendingAction ?? payload?.pending_action ?? 'none')
   return `当前：${action} / 下一步：${pending}`
+}
+
+function formatAgentLlmProvider(value: unknown): string {
+  const raw = String(value ?? '').trim()
+  if (!raw)
+    return '--'
+  return AGENT_LLM_PROVIDER_LABELS[normalizeLookupKey(raw)] || raw
+}
+
+function formatAgentLlmSource(meta: AgentBacktestLlmMeta | null | undefined): string {
+  const source = normalizeLookupKey(meta?.source)
+  if (source === 'personal')
+    return '个人 AI'
+  if (source === 'system')
+    return '系统内置 AI'
+  return '--'
+}
+
+function formatAgentLlmHistorySource(meta: AgentBacktestLlmMeta | null | undefined): string {
+  const sourceText = formatAgentLlmSource(meta)
+  const providerText = formatAgentLlmProvider(meta?.provider)
+  if (sourceText === '--')
+    return providerText
+  if (providerText === '--')
+    return sourceText
+  return `${sourceText.replace(' AI', '')} ${providerText}`
+}
+
+function formatAgentLlmModel(meta: AgentBacktestLlmMeta | null | undefined): string {
+  const providerText = formatAgentLlmProvider(meta?.provider)
+  const modelText = String(meta?.model ?? '').trim()
+  if (!modelText)
+    return providerText
+  if (providerText === '--')
+    return modelText
+  return `${providerText} / ${modelText}`
 }
 
 function formatDecisionSourceBreakdown(value: Record<string, unknown> | null | undefined): string {
@@ -820,6 +865,7 @@ const agentSummary = computed(() => currentAgentRun.value?.summary || {})
 const agentDiagnostics = computed(() => currentAgentRun.value?.diagnostics || {})
 const agentTradeRows = computed<AgentBacktestTradeItem[]>(() => currentAgentRun.value?.trades || [])
 const agentTimelineRows = computed<AgentBacktestDailyStep[]>(() => currentAgentRun.value?.dailySteps || [])
+const currentAgentLlmMeta = computed<AgentBacktestLlmMeta | null>(() => currentAgentRun.value?.llmMeta || null)
 
 function stopAgentPolling() {
   if (agentPollTimer) {
@@ -1371,6 +1417,18 @@ const agentHistoryColumns = [
     ),
   },
   {
+    title: 'AI 来源',
+    key: 'llmMeta',
+    render: (row: AgentBacktestHistoryItem) => h(
+      NTag,
+      {
+        size: 'small',
+        type: normalizeLookupKey(row.llmMeta?.source) === 'personal' ? 'success' : 'info',
+      },
+      { default: () => formatAgentLlmHistorySource(row.llmMeta) },
+    ),
+  },
+  {
     title: '收益',
     key: 'summary',
     render: (row: AgentBacktestHistoryItem) => metric(row.summary?.totalReturnPct ?? row.summary?.total_return_pct, 2),
@@ -1663,6 +1721,12 @@ onBeforeUnmount(() => {
                 </n-descriptions-item>
                 <n-descriptions-item label="有效区间">
                   {{ currentAgentRun.effectiveRange.startDate }} ~ {{ currentAgentRun.effectiveRange.endDate }}
+                </n-descriptions-item>
+                <n-descriptions-item label="AI 来源">
+                  {{ formatAgentLlmSource(currentAgentLlmMeta) }}
+                </n-descriptions-item>
+                <n-descriptions-item label="AI 模型">
+                  {{ formatAgentLlmModel(currentAgentLlmMeta) }}
                 </n-descriptions-item>
                 <n-descriptions-item label="总收益">
                   <NTag size="small" :type="returnTagType(agentSummary.totalReturnPct ?? agentSummary.total_return_pct)">

@@ -1,6 +1,6 @@
 import type { AxiosError } from 'axios'
-import type { RegisterRequest } from '@/types/auth'
-import { getAuthStatus, login, logout, register } from '@/api/auth'
+import type { ChangePasswordRequest, RegisterRequest } from '@/types/auth'
+import { getAuthStatus, login, logout, register, changePassword as requestPasswordChange } from '@/api/auth'
 import { useRouteStore } from './router'
 import { useTabStore } from './tab'
 
@@ -9,6 +9,7 @@ interface SessionState {
   loading: boolean
   authEnabled: boolean
   loggedIn: boolean
+  passwordChangeable: boolean
   currentUser: {
     id: number | string
     username: string
@@ -43,6 +44,25 @@ function extractRegisterError(error: unknown): string {
   return message || '注册失败，请稍后重试'
 }
 
+function extractChangePasswordError(error: unknown): string {
+  const axiosError = error as AxiosError<{ error?: string, message?: string }>
+  const status = axiosError?.response?.status
+  const code = axiosError?.response?.data?.error
+  const message = axiosError?.response?.data?.message
+
+  if (status === 401) {
+    return message || '登录已失效，请重新登录'
+  }
+  if (status === 400 && code === 'not_changeable') {
+    return message || '当前环境不支持网页改密'
+  }
+  if (status === 400) {
+    return message || '密码修改失败，请检查输入'
+  }
+
+  return message || '修改密码失败，请稍后重试'
+}
+
 function normalizeRoleCode(roleCode: string | null | undefined): string {
   const value = String(roleCode || '').trim().toLowerCase()
   if (value === 'super_admin')
@@ -68,6 +88,7 @@ export const useSessionStore = defineStore('session-store', {
     loading: false,
     authEnabled: false,
     loggedIn: false,
+    passwordChangeable: false,
     currentUser: null,
   }),
   getters: {
@@ -88,6 +109,7 @@ export const useSessionStore = defineStore('session-store', {
         const status = await getAuthStatus()
         this.authEnabled = status.authEnabled
         this.loggedIn = status.loggedIn
+        this.passwordChangeable = status.passwordChangeable
         this.currentUser = normalizeCurrentUser(status.currentUser ?? null)
         this.initialized = true
       }
@@ -151,6 +173,19 @@ export const useSessionStore = defineStore('session-store', {
       }
     },
 
+    async changePassword(payload: ChangePasswordRequest): Promise<{ success: boolean, error?: string }> {
+      try {
+        await requestPasswordChange(payload)
+        return { success: true }
+      }
+      catch (error: unknown) {
+        return {
+          success: false,
+          error: extractChangePasswordError(error),
+        }
+      }
+    },
+
     async doLogout(): Promise<void> {
       try {
         await logout()
@@ -161,6 +196,7 @@ export const useSessionStore = defineStore('session-store', {
         routeStore.resetRouteStore()
         tabStore.clearAllTabs()
         this.loggedIn = false
+        this.passwordChangeable = false
         this.currentUser = null
         this.initialized = false
       }

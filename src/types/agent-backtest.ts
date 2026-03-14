@@ -51,6 +51,13 @@ export interface AgentBacktestDailyStep {
   executionPayload: Record<string, unknown>
 }
 
+export interface AgentBacktestLlmMeta {
+  source: 'system' | 'personal' | string
+  provider: string
+  baseUrl: string
+  model: string
+}
+
 export interface AgentBacktestDetailResponse {
   runGroupId: number
   code: string
@@ -64,6 +71,7 @@ export interface AgentBacktestDetailResponse {
   createdAt: string | null
   completedAt: string | null
   activeResultVersion: number
+  llmMeta?: AgentBacktestLlmMeta | null
   summary: Record<string, unknown>
   diagnostics: Record<string, unknown>
   decisionSourceBreakdown: Record<string, number>
@@ -82,6 +90,7 @@ export interface AgentBacktestHistoryItem {
   phase: 'fast' | 'refine' | 'done' | string
   createdAt: string | null
   completedAt: string | null
+  llmMeta?: AgentBacktestLlmMeta | null
   summary: Record<string, unknown>
 }
 

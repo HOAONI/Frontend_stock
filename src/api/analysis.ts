@@ -56,6 +56,9 @@ export async function getTaskList(status?: string, limit = 50): Promise<TaskList
     total: result.total,
     pending: result.pending,
     processing: result.processing,
+    completed: Number(result.completed ?? 0),
+    failed: Number(result.failed ?? 0),
+    cancelled: Number(result.cancelled ?? 0),
     tasks: (result.tasks || []).map(task => toCamelCase<TaskInfo>(task)),
   }
 }

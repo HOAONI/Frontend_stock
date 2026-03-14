@@ -1,5 +1,6 @@
 import { Icon } from '@iconify/vue'
 import { NIcon } from 'naive-ui'
+import { resolveInlineSvgIcon } from './runtime-icon'
 
 export function renderIcon(icon?: string, props?: import('naive-ui').IconProps) {
   if (!icon)
@@ -12,17 +13,11 @@ export function createIcon(icon?: string, props?: import('naive-ui').IconProps) 
   if (!icon)
     return
 
-  const isLocal = icon.startsWith('local:')
   let innerIcon: any
-  if (isLocal) {
-    const svgName = icon.replace('local:', '')
-    const svg = import.meta.glob('@/assets/svg-icons/*.svg', {
-      query: '?raw',
-      import: 'default',
-      eager: true,
-    })
-    const target = svg[`/src/assets/svg-icons/${svgName}.svg`]
-    innerIcon = h(NIcon, { ...props, innerHTML: target })
+  const inlineSvg = resolveInlineSvgIcon(icon)
+
+  if (inlineSvg) {
+    innerIcon = h(NIcon, { ...props, innerHTML: inlineSvg })
   }
   else {
     innerIcon = h(NIcon, props, { default: () => h(Icon, { icon }) })

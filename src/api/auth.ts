@@ -1,4 +1,9 @@
-import type { AuthStatusResponse, LoginRequest, RegisterRequest } from '@/types/auth'
+import type {
+  AuthStatusResponse,
+  ChangePasswordRequest,
+  LoginRequest,
+  RegisterRequest,
+} from '@/types/auth'
 import client from './client'
 
 function parseCurrentUser(data: unknown): AuthStatusResponse['currentUser'] {
@@ -38,6 +43,7 @@ export async function getAuthStatus(): Promise<AuthStatusResponse> {
   return {
     authEnabled: Boolean(data.authEnabled),
     loggedIn: Boolean(data.loggedIn),
+    passwordChangeable: Boolean(data.passwordChangeable),
     currentUser: parseCurrentUser(data.currentUser),
   }
 }
@@ -55,6 +61,10 @@ export async function register(payload: RegisterRequest): Promise<void> {
     accountType: payload.accountType,
     adminSecret: payload.adminSecret,
   })
+}
+
+export async function changePassword(payload: ChangePasswordRequest): Promise<void> {
+  await client.post('/api/v1/auth/change-password', payload)
 }
 
 export async function logout(): Promise<void> {

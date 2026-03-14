@@ -3,6 +3,7 @@ export type RegisterAccountType = 'user' | 'admin'
 export interface AuthStatusResponse {
   authEnabled: boolean
   loggedIn: boolean
+  passwordChangeable: boolean
   currentUser?: {
     id: number | string
     username: string
@@ -15,6 +16,12 @@ export interface AuthStatusResponse {
 export interface LoginRequest {
   username: string
   password: string
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string
+  newPassword: string
+  newPasswordConfirm: string
 }
 
 export interface RegisterRequest {

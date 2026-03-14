@@ -16,6 +16,35 @@ function extractMessage(error: unknown, fallback: string): string {
   return axiosError?.response?.data?.message || fallback
 }
 
+function normalizeAiSettings(settings: UserSettingsResponse): UserSettingsResponse['ai'] {
+  return {
+    personalProvider: settings.ai?.personalProvider || '',
+    personalModel: settings.ai?.personalModel || '',
+    provider: settings.ai?.effective?.provider || settings.ai?.systemDefault?.provider || settings.ai?.provider || '',
+    baseUrl: settings.ai?.effective?.baseUrl || settings.ai?.systemDefault?.baseUrl || settings.ai?.baseUrl || '',
+    model: settings.ai?.effective?.model || settings.ai?.systemDefault?.model || settings.ai?.model || '',
+    hasToken: Boolean(settings.ai?.hasToken),
+    apiTokenMasked: settings.ai?.apiTokenMasked || '',
+    source: settings.ai?.source || (settings.ai?.hasToken ? 'personal' : 'system'),
+    hasSystemToken: Boolean(settings.ai?.hasSystemToken),
+    requiresProviderReselection: Boolean(settings.ai?.requiresProviderReselection),
+    personalBindingAvailable: settings.ai?.personalBindingAvailable ?? true,
+    personalBindingIssue: settings.ai?.personalBindingIssue || '',
+    systemDefault: {
+      provider: settings.ai?.systemDefault?.provider || '',
+      baseUrl: settings.ai?.systemDefault?.baseUrl || '',
+      model: settings.ai?.systemDefault?.model || '',
+      hasToken: Boolean(settings.ai?.systemDefault?.hasToken),
+      source: settings.ai?.systemDefault?.source || 'none',
+    },
+    effective: {
+      provider: settings.ai?.effective?.provider || settings.ai?.provider || '',
+      baseUrl: settings.ai?.effective?.baseUrl || settings.ai?.baseUrl || '',
+      model: settings.ai?.effective?.model || settings.ai?.model || '',
+    },
+  }
+}
+
 export const useUserSettingsStore = defineStore('user-settings-store', {
   state: (): UserSettingsState => ({
     loading: false,
@@ -33,35 +62,21 @@ export const useUserSettingsStore = defineStore('user-settings-store', {
           initialCapital: Number(settings.simulation?.initialCapital ?? 100000),
           note: settings.simulation?.note || '',
         },
-        ai: {
-          personalProvider: settings.ai?.personalProvider || '',
-          provider: settings.ai?.effective?.provider || settings.ai?.systemDefault?.provider || settings.ai?.provider || '',
-          baseUrl: settings.ai?.effective?.baseUrl || settings.ai?.systemDefault?.baseUrl || settings.ai?.baseUrl || '',
-          model: settings.ai?.effective?.model || settings.ai?.systemDefault?.model || settings.ai?.model || '',
-          hasToken: Boolean(settings.ai?.hasToken),
-          apiTokenMasked: settings.ai?.apiTokenMasked || '',
-          source: settings.ai?.source || (settings.ai?.hasToken ? 'personal' : 'system'),
-          hasSystemToken: Boolean(settings.ai?.hasSystemToken),
-          requiresProviderReselection: Boolean(settings.ai?.requiresProviderReselection),
-          systemDefault: {
-            provider: settings.ai?.systemDefault?.provider || '',
-            baseUrl: settings.ai?.systemDefault?.baseUrl || '',
-            model: settings.ai?.systemDefault?.model || '',
-            hasToken: Boolean(settings.ai?.systemDefault?.hasToken),
-            source: settings.ai?.systemDefault?.source || 'none',
-          },
-          effective: {
-            provider: settings.ai?.effective?.provider || settings.ai?.provider || '',
-            baseUrl: settings.ai?.effective?.baseUrl || settings.ai?.baseUrl || '',
-            model: settings.ai?.effective?.model || settings.ai?.model || '',
-          },
-        },
+        ai: normalizeAiSettings(settings),
         strategy: {
           positionMaxPct: Number(settings.strategy?.positionMaxPct ?? 30),
           stopLossPct: Number(settings.strategy?.stopLossPct ?? 8),
           takeProfitPct: Number(settings.strategy?.takeProfitPct ?? 15),
         },
         updatedAt: settings.updatedAt || '',
+      }
+    },
+
+    applyAiSettings(settings: UserSettingsResponse) {
+      this.settings = {
+        ...this.settings,
+        ai: normalizeAiSettings(settings),
+        updatedAt: settings.updatedAt || this.settings.updatedAt,
       }
     },
 

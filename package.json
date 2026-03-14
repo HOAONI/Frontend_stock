@@ -41,6 +41,7 @@
     "dev:prod": "vite --mode production",
     "build": "vite build",
     "build:dev": "vite build --mode dev",
+    "icons:generate-runtime": "node scripts/generate-runtime-icons.mjs",
     "preview": "vite preview --port 9981",
     "lint": "eslint . && vue-tsc --noEmit",
     "lint:fix": "eslint . --fix",
