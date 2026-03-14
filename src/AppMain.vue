@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import type { App } from 'vue'
+import NaiveProvider from '@/components/common/NaiveProvider.vue'
 import { installRouter } from '@/router'
 import { installPinia } from '@/store'
-import { naiveI18nOptions } from '@/utils'
-import { darkTheme } from 'naive-ui'
-import { useAppStore } from './store'
+import { dateZhCN, zhCN } from 'naive-ui'
 
 // 创建异步初始化 Promise - 这会让组件变成异步组件
 const initializationPromise = (async () => {
@@ -32,26 +31,17 @@ const initializationPromise = (async () => {
 
 // 等待初始化完成 - 这使得整个 setup 函数变成异步的
 await initializationPromise
-
-const appStore = useAppStore()
-
-const naiveLocale = computed(() => {
-  return naiveI18nOptions[appStore.lang] ? naiveI18nOptions[appStore.lang] : naiveI18nOptions.enUS
-})
 </script>
 
 <template>
   <n-config-provider
     class="wh-full"
     inline-theme-disabled
-    :theme="appStore.colorMode === 'dark' ? darkTheme : null"
-    :locale="naiveLocale.locale"
-    :date-locale="naiveLocale.dateLocale"
-    :theme-overrides="appStore.theme"
+    :locale="zhCN"
+    :date-locale="dateZhCN"
   >
-    <naive-provider>
+    <NaiveProvider>
       <router-view />
-      <Watermark :show-watermark="appStore.showWatermark" />
-    </naive-provider>
+    </NaiveProvider>
   </n-config-provider>
 </template>

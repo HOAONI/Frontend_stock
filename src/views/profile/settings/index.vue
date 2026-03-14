@@ -12,11 +12,9 @@ const {
   aiBindingSubmitting,
   aiSourceAlertType,
   aiSourceHintText,
-  appLanguageModel,
   appStatusTags,
   canUnbindAiBinding,
   clientInfo,
-  colorModeModel,
   currentAiSourceText,
   currentAiSourceType,
   displayName,
@@ -25,7 +23,6 @@ const {
   hasPersonalAiToken,
   hasSystemAi,
   lastSavedAt,
-  layoutModeModel,
   passwordChangeable,
   passwordError,
   passwordForm,
@@ -41,8 +38,6 @@ const {
   saveAll,
   saveErrors,
   scopeText,
-  showBreadcrumbModel,
-  showTabsModel,
   submitPasswordChange,
   systemBaseUrlText,
   systemDefaultStateText,
@@ -88,11 +83,6 @@ const {
           v-model:personal-model="personalModelInput"
           v-model:api-token="apiTokenInput"
           v-model:password-form="passwordForm"
-          v-model:app-language="appLanguageModel"
-          v-model:color-mode="colorModeModel"
-          v-model:layout-mode="layoutModeModel"
-          v-model:show-tabs="showTabsModel"
-          v-model:show-breadcrumb="showBreadcrumbModel"
           :username="username"
           :display-name="displayName"
           :user-id-text="userIdText"

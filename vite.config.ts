@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: env.VITE_BASE_URL,
-    plugins: createVitePlugins(env),
+    plugins: createVitePlugins(),
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src'),

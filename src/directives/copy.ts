@@ -1,5 +1,4 @@
 import type { App, Directive } from 'vue'
-import { $t } from '@/utils'
 
 interface CopyHTMLElement extends HTMLElement {
   _copyText: string
@@ -11,12 +10,12 @@ export function install(app: App) {
 
   function clipboardEnable() {
     if (!isSupported.value) {
-      window.$message.error($t('components.copyText.unsupportedError'))
+      window.$message.error('当前浏览器不支持复制')
       return false
     }
 
     if (permissionWrite.value === 'denied') {
-      window.$message.error($t('components.copyText.unpermittedError'))
+      window.$message.error('当前浏览器未授予剪贴板权限')
       return false
     }
     return true
@@ -26,7 +25,7 @@ export function install(app: App) {
     if (!clipboardEnable())
       return
     copy(this._copyText)
-    window.$message.success($t('components.copyText.message'))
+    window.$message.success('已复制到剪贴板')
   }
 
   function updataClipboard(el: CopyHTMLElement, text: string) {

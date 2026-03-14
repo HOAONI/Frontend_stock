@@ -3,7 +3,7 @@ import type { RouteRecordRaw } from 'vue-router'
 import { HOME_PATH } from '@/constants/home-path'
 import { usePermission } from '@/hooks'
 import Layout from '@/layouts/index.vue'
-import { $t, arrayToTree, renderIcon } from '@/utils'
+import { arrayToTree, renderIcon } from '@/utils'
 import { clone, min, omit, pick } from 'radash'
 import { RouterLink } from 'vue-router'
 
@@ -57,13 +57,6 @@ export function createRoutes(routes: AppRoute.RowRoute[]) {
   // Insert the processed route into the root route
   appRootRoute.children = resultRouter as unknown as RouteRecordRaw[]
   return appRootRoute
-}
-
-// Generate an array of route names that need to be kept alive
-export function generateCacheRoutes(routes: AppRoute.RowRoute[]) {
-  return routes
-    .filter(i => i.keepAlive)
-    .map(i => i.name)
 }
 
 function setRedirect(routes: AppRoute.Route[]) {
@@ -133,9 +126,9 @@ function transformAuthRoutesToMenus(userRoutes: AppRoute.Route[]) {
                       path: item.path,
                     },
                   },
-                  { default: () => $t(`route.${String(item.name)}`, item.meta.title) },
+                  { default: () => item.meta.title },
                 )
-            : () => $t(`route.${String(item.name)}`, item.meta.title),
+            : () => item.meta.title,
         key: item.path,
         icon: item.meta.icon ? renderIcon(item.meta.icon) : undefined,
       }

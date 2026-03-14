@@ -1,6 +1,5 @@
 export type PersonalConfigDetailTab = 'basic' | 'preferences' | 'security' | 'notifications' | 'integrations'
 
-export type PersonalConfigColorMode = 'light' | 'dark' | 'auto'
 export type PersonalConfigFeedbackType = 'default' | 'error' | 'info' | 'success' | 'warning'
 
 export interface PersonalConfigStatusTag {

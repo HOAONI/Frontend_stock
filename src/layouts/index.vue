@@ -8,7 +8,6 @@ import {
   CollapaseButton,
   Logo,
   MobileDrawer,
-  TabBar,
   UserCenter,
 } from './components'
 import Content from './Content.vue'
@@ -114,7 +113,7 @@ watch(
 <template>
   <n-layout has-sider style="height: 100%;">
     <n-layout-sider
-      v-if="!appStore.isMobile && appStore.layoutMode === 'vertical'"
+      v-if="!appStore.isMobile"
       :collapsed="appStore.collapsed"
       :collapsed-width="sidebarCollapsedWidth"
       :width="sidebarWidth"
@@ -134,7 +133,7 @@ watch(
     </n-layout-sider>
 
     <n-layout>
-      <n-layout-header v-if="appStore.layoutMode === 'vertical'" bordered>
+      <n-layout-header bordered>
         <n-space justify="space-between" align="center" style="width: 100%; height: 60px; padding: 0 16px;">
           <n-space align="center">
             <n-button v-if="appStore.isMobile" quaternary @click="showMobileDrawer = true">
@@ -146,7 +145,7 @@ watch(
             </n-button>
             <template v-else>
               <CollapaseButton />
-              <Breadcrumb v-if="appStore.showBreadcrumb" />
+              <Breadcrumb />
             </template>
           </n-space>
 
@@ -155,18 +154,10 @@ watch(
       </n-layout-header>
 
       <n-layout-content>
-        <n-card
-          v-if="appStore.showTabs || appStore.layoutMode === 'full-content'"
-          v-show="appStore.showTabs && appStore.layoutMode === 'vertical'"
-          :bordered="false"
-          size="small"
-        >
-          <TabBar />
-        </n-card>
         <Content />
       </n-layout-content>
 
-      <n-layout-footer v-if="appStore.showFooter && appStore.layoutMode === 'vertical'" bordered>
+      <n-layout-footer v-if="appStore.footerText" bordered>
         <n-space justify="center" style="padding: 10px 0;">
           {{ appStore.footerText }}
         </n-space>

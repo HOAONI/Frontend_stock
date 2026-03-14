@@ -6,15 +6,7 @@ const appStore = useAppStore()
 
 const name = import.meta.env.VITE_APP_NAME
 
-const hidenLogoText = computed(() => {
-  if (['sidebar', 'mixed-sidebar', 'horizontal'].includes(appStore.layoutMode)) {
-    return false
-  }
-  if (['two-column', 'mixed-two-column'].includes(appStore.layoutMode)) {
-    return true
-  }
-  return appStore.collapsed
-})
+const hidenLogoText = computed(() => appStore.collapsed)
 </script>
 
 <template>

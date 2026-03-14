@@ -280,33 +280,33 @@ onMounted(loadConfig)
                     </n-text>
 
                     <n-form-item label="配置值">
-                    <n-switch
-                      v-if="item.schema?.uiControl === 'switch'"
-                      :value="toDisplayValue(item) === 'true'"
-                      @update:value="(value) => setValue(item.key, value ? 'true' : 'false')"
-                    />
+                      <n-switch
+                        v-if="item.schema?.uiControl === 'switch'"
+                        :value="toDisplayValue(item) === 'true'"
+                        @update:value="(value) => setValue(item.key, value ? 'true' : 'false')"
+                      />
 
-                    <n-input-number
-                      v-else-if="item.schema?.uiControl === 'number'"
-                      :value="Number(toDisplayValue(item))"
-                      style="width: 240px"
-                      @update:value="(value) => setValue(item.key, String(value ?? ''))"
-                    />
+                      <n-input-number
+                        v-else-if="item.schema?.uiControl === 'number'"
+                        :value="Number(toDisplayValue(item))"
+                        style="width: 240px"
+                        @update:value="(value) => setValue(item.key, String(value ?? ''))"
+                      />
 
-                    <n-input
-                      v-else-if="item.schema?.uiControl === 'textarea'"
-                      type="textarea"
-                      :value="toDisplayValue(item)"
-                      @update:value="(value) => setValue(item.key, value)"
-                    />
+                      <n-input
+                        v-else-if="item.schema?.uiControl === 'textarea'"
+                        type="textarea"
+                        :value="toDisplayValue(item)"
+                        @update:value="(value) => setValue(item.key, value)"
+                      />
 
-                    <n-input
-                      v-else
-                      :type="item.schema?.isSensitive ? 'password' : 'text'"
-                      show-password-on="click"
-                      :value="toDisplayValue(item)"
-                      @update:value="(value) => setValue(item.key, value)"
-                    />
+                      <n-input
+                        v-else
+                        :type="item.schema?.isSensitive ? 'password' : 'text'"
+                        show-password-on="click"
+                        :value="toDisplayValue(item)"
+                        @update:value="(value) => setValue(item.key, value)"
+                      />
                     </n-form-item>
 
                     <n-text depth="3" class="text-12px">

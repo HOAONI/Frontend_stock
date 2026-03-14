@@ -2,7 +2,6 @@ import type { AxiosError } from 'axios'
 import type { ChangePasswordRequest, RegisterRequest } from '@/types/auth'
 import { getAuthStatus, login, logout, register, changePassword as requestPasswordChange } from '@/api/auth'
 import { useRouteStore } from './router'
-import { useTabStore } from './tab'
 
 interface SessionState {
   initialized: boolean
@@ -129,9 +128,7 @@ export const useSessionStore = defineStore('session-store', {
         await login({ username, password })
         await this.fetchStatus()
         const routeStore = useRouteStore()
-        const tabStore = useTabStore()
         routeStore.resetRouteStore()
-        tabStore.clearAllTabs()
         return { success: true }
       }
       catch (error: unknown) {
@@ -160,9 +157,7 @@ export const useSessionStore = defineStore('session-store', {
           }
         }
         const routeStore = useRouteStore()
-        const tabStore = useTabStore()
         routeStore.resetRouteStore()
-        tabStore.clearAllTabs()
         return { success: true }
       }
       catch (error: unknown) {
@@ -192,9 +187,7 @@ export const useSessionStore = defineStore('session-store', {
       }
       finally {
         const routeStore = useRouteStore()
-        const tabStore = useTabStore()
         routeStore.resetRouteStore()
-        tabStore.clearAllTabs()
         this.loggedIn = false
         this.passwordChangeable = false
         this.currentUser = null

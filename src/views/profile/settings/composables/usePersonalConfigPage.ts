@@ -1,19 +1,14 @@
 import type { AxiosError } from 'axios'
-import type { LayoutMode } from '@/store/app'
-import type {
-  PersonalAiProvider,
-  UpdateUserSettingsRequest,
-} from '@/types/user-settings'
+import type { PersonalAiProvider, UpdateUserSettingsRequest } from '@/types/user-settings'
 import type {
   PersonalConfigClientInfo,
-  PersonalConfigColorMode,
   PersonalConfigDetailTab,
   PersonalConfigFeedbackType,
   PersonalConfigPasswordForm,
   PersonalConfigStatusTag,
 } from '../types'
 import { updateMyUserSettings } from '@/api/user-settings'
-import { useAppStore, useSessionStore, useUserSettingsStore } from '@/store'
+import { useSessionStore, useUserSettingsStore } from '@/store'
 import { formatDateTime } from '@/utils/stock'
 
 const MASKED_TOKEN = '******'
@@ -95,7 +90,6 @@ function extractMessage(error: unknown, fallback: string): string {
 
 export function usePersonalConfigPage() {
   const router = useRouter()
-  const appStore = useAppStore()
   const sessionStore = useSessionStore()
   const userSettingsStore = useUserSettingsStore()
 
@@ -133,42 +127,6 @@ export function usePersonalConfigPage() {
     if (!userSettingsStore.settings.updatedAt)
       return '尚未同步'
     return formatDateTime(userSettingsStore.settings.updatedAt)
-  })
-
-  const appLanguageModel = computed<App.lang>({
-    get: () => appStore.lang,
-    set: value => appStore.setAppLang(value),
-  })
-
-  const colorModeModel = computed<PersonalConfigColorMode>({
-    get: () => {
-      const current = appStore.storeColorMode
-      if (current === 'light' || current === 'dark')
-        return current
-      return 'auto'
-    },
-    set: value => appStore.setColorMode(value),
-  })
-
-  const layoutModeModel = computed<LayoutMode>({
-    get: () => appStore.layoutMode,
-    set: (value) => {
-      appStore.layoutMode = value
-    },
-  })
-
-  const showTabsModel = computed<boolean>({
-    get: () => appStore.showTabs,
-    set: (value) => {
-      appStore.showTabs = value
-    },
-  })
-
-  const showBreadcrumbModel = computed<boolean>({
-    get: () => appStore.showBreadcrumb,
-    set: (value) => {
-      appStore.showBreadcrumb = value
-    },
   })
 
   const currentSettingsPayload = computed<UpdateUserSettingsRequest>(() => ({
@@ -264,7 +222,7 @@ export function usePersonalConfigPage() {
       type: currentAiSourceType.value,
     },
     {
-      label: '界面偏好即时生效',
+      label: '配置按模块保存',
       type: 'default',
     },
   ])
@@ -593,23 +551,20 @@ export function usePersonalConfigPage() {
     aiBindingSubmitting,
     aiSourceAlertType,
     aiSourceHintText,
-    appLanguageModel,
     appStatusTags,
     canUnbindAiBinding,
     clientInfo,
-    colorModeModel,
     currentAiSourceText,
     currentAiSourceType,
     displayName,
     goTradingCenter,
     hasPendingChanges,
     hasPersonalAiToken,
-    personalBindingAvailable,
-    personalBindingIssue,
     hasSystemAi,
     lastSavedAt,
-    layoutModeModel,
     load,
+    personalBindingAvailable,
+    personalBindingIssue,
     personalModelInput,
     personalProviderInput,
     passwordChangeable,
@@ -624,8 +579,6 @@ export function usePersonalConfigPage() {
     saveAll,
     saveErrors,
     scopeText,
-    showBreadcrumbModel,
-    showTabsModel,
     submitPasswordChange,
     systemBaseUrlText,
     systemDefaultStateText,

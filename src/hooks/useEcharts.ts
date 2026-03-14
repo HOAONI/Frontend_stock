@@ -15,7 +15,6 @@ import type {
   ToolboxComponentOption,
   TooltipComponentOption,
 } from 'echarts/components'
-import { useAppStore } from '@/store'
 import { BarChart, CandlestickChart, LineChart, PieChart, RadarChart } from 'echarts/charts'
 
 import {
@@ -74,8 +73,6 @@ echarts.use([
 export function useEcharts(ref: string, chartOptions: Ref<ECOption>) {
   const el = useTemplateRef<HTMLLIElement>(ref)
 
-  const appStore = useAppStore()
-
   let chart: echarts.ECharts | null = null
   let initializing = false
 
@@ -97,8 +94,7 @@ export function useEcharts(ref: string, chartOptions: Ref<ECOption>) {
       if (chart || !el.value || !hasValidSize())
         return
 
-      const chartTheme = appStore.colorMode === 'dark' ? 'dark' : 'light'
-      chart = echarts.init(el.value, chartTheme)
+      chart = echarts.init(el.value, 'light')
       chart.setOption({ backgroundColor: 'transparent', ...chartOptions.value })
     }
     finally {
@@ -128,16 +124,6 @@ export function useEcharts(ref: string, chartOptions: Ref<ECOption>) {
     else
       await initIfNeeded()
   }, { immediate: true })
-
-  watch(() => appStore.colorMode, async () => {
-    if (!el.value)
-      return
-    const updateOptions = chartOptions.value
-    destroy()
-    await initIfNeeded()
-    if (chart)
-      chart.setOption({ backgroundColor: 'transparent', ...updateOptions })
-  })
 
   watch(chartOptions, async (newValue) => {
     await update(newValue)

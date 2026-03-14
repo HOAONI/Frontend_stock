@@ -232,18 +232,18 @@ onMounted(load)
             </n-descriptions>
 
             <n-form-item label="参数值">
-            <n-input
-              v-if="currentItem.schema?.uiControl !== 'textarea'"
-              v-model:value="editValue"
-              :type="currentItem.schema?.isSensitive ? 'password' : 'text'"
-              show-password-on="click"
-            />
-            <n-input
-              v-else
-              v-model:value="editValue"
-              type="textarea"
-              :autosize="{ minRows: 3, maxRows: 8 }"
-            />
+              <n-input
+                v-if="currentItem.schema?.uiControl !== 'textarea'"
+                v-model:value="editValue"
+                :type="currentItem.schema?.isSensitive ? 'password' : 'text'"
+                show-password-on="click"
+              />
+              <n-input
+                v-else
+                v-model:value="editValue"
+                type="textarea"
+                :autosize="{ minRows: 3, maxRows: 8 }"
+              />
             </n-form-item>
 
             <n-alert v-for="message in editIssues" :key="message" type="error">

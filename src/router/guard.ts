@@ -1,6 +1,6 @@
 import type { Router } from 'vue-router'
 import { HOME_PATH } from '@/constants/home-path'
-import { useAppStore, useRouteStore, useSessionStore, useTabStore } from '@/store'
+import { useAppStore, useRouteStore, useSessionStore } from '@/store'
 
 const title = import.meta.env.VITE_APP_NAME
 
@@ -15,7 +15,6 @@ function safeRedirect(toPath: string | undefined): string | undefined {
 export function setupRouterGuard(router: Router) {
   const appStore = useAppStore()
   const routeStore = useRouteStore()
-  const tabStore = useTabStore()
   const sessionStore = useSessionStore()
 
   router.beforeEach(async (to, _from, next) => {
@@ -99,8 +98,6 @@ export function setupRouterGuard(router: Router) {
 
   router.beforeResolve((to) => {
     routeStore.setActiveMenu((to.meta.activeMenu as string) ?? to.fullPath)
-    tabStore.addTab(to)
-    tabStore.setCurrentTab(to.fullPath as string)
   })
 
   router.afterEach((to) => {

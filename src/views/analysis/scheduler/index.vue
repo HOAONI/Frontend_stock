@@ -68,6 +68,10 @@ function handleScopeUpdate(value: SchedulerScope) {
   setScope(value)
 }
 
+function handleRefreshClick() {
+  void refreshAll()
+}
+
 const focusedTaskLabel = computed(() => {
   if (!selectedTask.value)
     return null
@@ -110,7 +114,7 @@ const focusedTaskLabel = computed(() => {
             <n-text depth="3">
               最近刷新：{{ heroView.updatedAt }}
             </n-text>
-            <n-button type="primary" :loading="heroView.loading" @click="refreshAll">
+            <n-button type="primary" :loading="heroView.loading" @click="handleRefreshClick">
               刷新全部
             </n-button>
             <n-radio-group

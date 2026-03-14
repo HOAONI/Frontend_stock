@@ -13,7 +13,7 @@ const router = useRouter()
       type="primary"
       @click="router.push('/')"
     >
-      {{ $t('app.backHome') }}
+      返回首页
     </n-button>
   </div>
 </template>

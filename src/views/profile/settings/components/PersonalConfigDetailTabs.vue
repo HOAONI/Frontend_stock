@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import type { LayoutMode } from '@/store/app'
 import type { PersonalAiProvider, UserSettingsResponse } from '@/types/user-settings'
 import type {
   PersonalConfigClientInfo,
-  PersonalConfigColorMode,
   PersonalConfigDetailTab,
   PersonalConfigFeedbackType,
   PersonalConfigPasswordForm,
@@ -56,29 +54,8 @@ const personalProvider = defineModel<PersonalAiProvider | null>('personalProvide
 const personalModel = defineModel<string>('personalModel', { required: true })
 const apiToken = defineModel<string>('apiToken', { required: true })
 const passwordForm = defineModel<PersonalConfigPasswordForm>('passwordForm', { required: true })
-const appLanguage = defineModel<App.lang>('appLanguage', { required: true })
-const colorMode = defineModel<PersonalConfigColorMode>('colorMode', { required: true })
-const layoutMode = defineModel<LayoutMode>('layoutMode', { required: true })
-const showTabs = defineModel<boolean>('showTabs', { required: true })
-const showBreadcrumb = defineModel<boolean>('showBreadcrumb', { required: true })
 const isSiliconFlowSelected = computed(() => personalProvider.value === 'siliconflow')
 const siliconFlowBaseUrl = 'https://api.siliconflow.cn/v1'
-
-const languageOptions = [
-  { label: '中文', value: 'zhCN' as App.lang },
-  { label: 'English', value: 'enUS' as App.lang },
-]
-
-const colorModeOptions = [
-  { label: '浅色', value: 'light' as PersonalConfigColorMode },
-  { label: '深色', value: 'dark' as PersonalConfigColorMode },
-  { label: '跟随系统', value: 'auto' as PersonalConfigColorMode },
-]
-
-const layoutModeOptions = [
-  { label: '经典侧栏', value: 'vertical' as LayoutMode },
-  { label: '内容优先', value: 'full-content' as LayoutMode },
-]
 
 const notificationItems = [
   {
@@ -161,85 +138,11 @@ const notificationItems = [
         </n-space>
       </n-tab-pane>
 
-      <n-tab-pane name="preferences" tab="偏好设置">
+      <n-tab-pane name="preferences" tab="运行默认值">
         <n-space vertical :size="16">
           <n-alert type="info">
-            界面偏好会即时生效并保存在本地；运行默认值与策略参数需要点击顶部“保存更改”后才会写回服务器。
+            MVP 版本已固定为中文、浅色和经典后台布局。这里保留会写回账户配置的运行默认值与策略参数。
           </n-alert>
-
-          <n-card embedded title="界面偏好">
-            <n-form label-placement="top" :show-feedback="false">
-              <n-grid cols="1 s:2 m:2" responsive="screen" :x-gap="16" :y-gap="12">
-                <n-form-item-gi label="界面语言">
-                  <n-radio-group v-model:value="appLanguage">
-                    <n-space>
-                      <n-radio-button
-                        v-for="option in languageOptions"
-                        :key="option.value"
-                        :value="option.value"
-                      >
-                        {{ option.label }}
-                      </n-radio-button>
-                    </n-space>
-                  </n-radio-group>
-                </n-form-item-gi>
-
-                <n-form-item-gi label="主题模式">
-                  <n-radio-group v-model:value="colorMode">
-                    <n-space>
-                      <n-radio-button
-                        v-for="option in colorModeOptions"
-                        :key="option.value"
-                        :value="option.value"
-                      >
-                        {{ option.label }}
-                      </n-radio-button>
-                    </n-space>
-                  </n-radio-group>
-                </n-form-item-gi>
-
-                <n-form-item-gi label="布局模式">
-                  <n-radio-group v-model:value="layoutMode">
-                    <n-space>
-                      <n-radio-button
-                        v-for="option in layoutModeOptions"
-                        :key="option.value"
-                        :value="option.value"
-                      >
-                        {{ option.label }}
-                      </n-radio-button>
-                    </n-space>
-                  </n-radio-group>
-                </n-form-item-gi>
-
-                <n-form-item-gi label="浏览器时区">
-                  <n-input :value="clientInfo.timezone" readonly />
-                </n-form-item-gi>
-
-                <n-form-item-gi label="标签栏">
-                  <n-switch v-model:value="showTabs">
-                    <template #checked>
-                      显示
-                    </template>
-                    <template #unchecked>
-                      隐藏
-                    </template>
-                  </n-switch>
-                </n-form-item-gi>
-
-                <n-form-item-gi label="面包屑">
-                  <n-switch v-model:value="showBreadcrumb">
-                    <template #checked>
-                      显示
-                    </template>
-                    <template #unchecked>
-                      隐藏
-                    </template>
-                  </n-switch>
-                </n-form-item-gi>
-              </n-grid>
-            </n-form>
-          </n-card>
 
           <n-card embedded title="默认行为与策略">
             <n-form label-placement="top" :show-feedback="false">
@@ -277,6 +180,23 @@ const notificationItems = [
                 </n-form-item-gi>
               </n-grid>
             </n-form>
+          </n-card>
+
+          <n-card embedded title="当前浏览器环境">
+            <n-descriptions bordered :column="2" label-placement="top">
+              <n-descriptions-item label="浏览器">
+                {{ clientInfo.browser }}
+              </n-descriptions-item>
+              <n-descriptions-item label="设备平台">
+                {{ clientInfo.platform }}
+              </n-descriptions-item>
+              <n-descriptions-item label="浏览器时区">
+                {{ clientInfo.timezone }}
+              </n-descriptions-item>
+              <n-descriptions-item label="浏览器语言">
+                {{ clientInfo.locale }}
+              </n-descriptions-item>
+            </n-descriptions>
           </n-card>
         </n-space>
       </n-tab-pane>

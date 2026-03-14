@@ -1,16 +1,13 @@
 import type { MenuOption } from 'naive-ui'
 import { router } from '@/router'
 import { staticRoutes } from '@/router/routes.static'
-import { fetchUserRoutes } from '@/service'
-import { $t } from '@/utils'
-import { createMenus, createRoutes, generateCacheRoutes } from './helper'
+import { createMenus, createRoutes } from './helper'
 
 interface RoutesStatus {
   isInitAuthRoute: boolean
   menus: MenuOption[]
   rowRoutes: AppRoute.RowRoute[]
   activeMenu: string | null
-  cacheRoutes: string[]
 }
 export const useRouteStore = defineStore('route-store', {
   state: (): RoutesStatus => {
@@ -19,7 +16,6 @@ export const useRouteStore = defineStore('route-store', {
       activeMenu: null,
       menus: [],
       rowRoutes: [],
-      cacheRoutes: [],
     }
   },
   actions: {
@@ -35,42 +31,11 @@ export const useRouteStore = defineStore('route-store', {
     setActiveMenu(key: string) {
       this.activeMenu = key
     },
-
-    async initRouteInfo() {
-      if (import.meta.env.VITE_ROUTE_LOAD_MODE === 'dynamic') {
-        try {
-          // Get user's route
-          const result = await fetchUserRoutes({
-            id: 1,
-          })
-
-          if (!result.isSuccess || !result.data) {
-            throw new Error('Failed to fetch user routes')
-          }
-
-          return result.data
-        }
-        catch (error) {
-          console.error('Failed to initialize route info:', error)
-          throw error
-        }
-      }
-      else {
-        this.rowRoutes = staticRoutes
-        return staticRoutes
-      }
-    },
     async initAuthRoute() {
       this.isInitAuthRoute = false
 
       try {
-        // Initialize route information
-        const rowRoutes = await this.initRouteInfo()
-        if (!rowRoutes) {
-          const error = new Error('Failed to get route information')
-          window.$message.error($t(`app.getRouteError`))
-          throw error
-        }
+        const rowRoutes = staticRoutes
         this.rowRoutes = rowRoutes
 
         // Generate actual route and insert
@@ -79,9 +44,6 @@ export const useRouteStore = defineStore('route-store', {
 
         // Generate side menu
         this.menus = createMenus(rowRoutes)
-
-        // Generate the route cache
-        this.cacheRoutes = generateCacheRoutes(rowRoutes)
 
         this.isInitAuthRoute = true
       }

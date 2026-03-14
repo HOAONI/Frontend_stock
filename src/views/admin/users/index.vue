@@ -419,18 +419,18 @@ onMounted(async () => {
         <n-space align="center" justify="space-between" :wrap="true">
           <n-space align="center" :wrap="true">
             <template v-if="currentSelected">
-              <n-tag type="success" round>
+              <NTag type="success" round>
                 {{ currentSelected.username }}
-              </n-tag>
+              </NTag>
               <n-text depth="3">
                 ID: {{ currentSelected.id }}
               </n-text>
               <n-text depth="3">
                 状态:
               </n-text>
-              <n-tag size="small" round :type="getStatusTagType(currentSelected.status)">
+              <NTag size="small" round :type="getStatusTagType(currentSelected.status)">
                 {{ getStatusText(currentSelected.status) }}
-              </n-tag>
+              </NTag>
               <n-text depth="3">
                 用户类型: {{ getRolesText(currentSelected) }}
               </n-text>
@@ -485,9 +485,9 @@ onMounted(async () => {
               {{ detailData.email || '--' }}
             </n-descriptions-item>
             <n-descriptions-item label="状态">
-              <n-tag size="small" round :type="getStatusTagType(detailData.status)">
+              <NTag size="small" round :type="getStatusTagType(detailData.status)">
                 {{ getStatusText(detailData.status) }}
-              </n-tag>
+              </NTag>
             </n-descriptions-item>
             <n-descriptions-item label="用户类型">
               {{ getRolesText(detailData) }}

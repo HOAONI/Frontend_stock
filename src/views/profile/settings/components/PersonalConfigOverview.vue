@@ -113,7 +113,7 @@ const avatarText = computed(() => props.displayName.slice(0, 2))
       </n-alert>
 
       <n-alert v-else-if="hasPendingChanges" type="warning">
-        你有尚未保存的服务端配置变更。界面偏好已即时生效，基础资料与策略参数需要点击“保存更改”后才会写回账户配置；AI 绑定请在下方卡片内直接操作。
+        你有尚未保存的服务端配置变更。基础资料与策略参数需要点击“保存更改”后才会写回账户配置；AI 绑定请在下方卡片内直接操作。
       </n-alert>
     </n-space>
   </n-card>
