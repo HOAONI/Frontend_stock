@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 交易账户快捷操作卡片负责承接刷新、绑定和导航等高频动作。
 import { CARD_DENSITY, SPACING } from '@/constants/design-tokens'
 import type { TradingUiType } from '../types'
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 交易账户头图区块负责展示账户身份、状态和核心资产摘要。
 import { CARD_DENSITY, SPACING } from '@/constants/design-tokens'
 import type { TradingAccountHeroModel } from '../types'
 

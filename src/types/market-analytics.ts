@@ -1,3 +1,4 @@
+/** 行情分析视图类型定义，描述均线、因子和分时数据结构。 */
 import type { QuoteResponse, StockHistoryPoint } from './stocks'
 
 export interface MaSeriesPoint {

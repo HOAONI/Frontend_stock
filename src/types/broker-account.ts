@@ -1,3 +1,4 @@
+/** 模拟盘绑定相关类型定义，描述账户状态和绑定请求结构。 */
 export interface SimulationAccountStatusResponse {
   isBound: boolean
   isVerified: boolean

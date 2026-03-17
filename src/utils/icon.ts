@@ -1,3 +1,4 @@
+/** 图标辅助工具，负责把图标名称转换为 Naive UI 可渲染节点。 */
 import { Icon } from '@iconify/vue'
 import { NIcon } from 'naive-ui'
 import { resolveInlineSvgIcon } from './runtime-icon'

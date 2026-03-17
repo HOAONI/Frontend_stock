@@ -1,3 +1,4 @@
+/** 复制指令负责把指定文本写入剪贴板并反馈结果。 */
 import type { App, Directive } from 'vue'
 
 interface CopyHTMLElement extends HTMLElement {

@@ -1,4 +1,5 @@
-// 系列类型的定义后缀都为 SeriesOption
+/** ECharts 组合式函数，负责按需注册图表组件并管理实例生命周期。 */
+// 系列类型的定义后缀都为 SeriesOption。
 import type {
   BarSeriesOption,
   CandlestickSeriesOption,
@@ -6,7 +7,7 @@ import type {
   PieSeriesOption,
   RadarSeriesOption,
 } from 'echarts/charts'
-// 组件类型的定义后缀都为 ComponentOption
+// 组件类型的定义后缀都为 ComponentOption。
 import type {
   DatasetComponentOption,
   GridComponentOption,
@@ -24,7 +25,7 @@ import {
   TitleComponent,
   ToolboxComponent,
   TooltipComponent,
-  TransformComponent, // 内置数据转换器组件 (filter, sort)
+  TransformComponent, // 内置数据转换器组件（如过滤、排序）。
 } from 'echarts/components'
 import * as echarts from 'echarts/core'
 
@@ -32,7 +33,7 @@ import { LabelLayout, UniversalTransition } from 'echarts/features'
 import { CanvasRenderer } from 'echarts/renderers'
 import { useTemplateRef } from 'vue'
 
-// 通过 ComposeOption 来组合出一个只有必须组件和图表的 Option 类型
+// 通过 ComposeOption 组合出当前项目真正会用到的图表配置类型。
 export type ECOption = echarts.ComposeOption<
   | BarSeriesOption
   | CandlestickSeriesOption
@@ -47,7 +48,7 @@ export type ECOption = echarts.ComposeOption<
   | RadarSeriesOption
 >
 
-// 注册必须的组件
+// 只注册项目实际会用到的图表与组件，减少打包体积。
 echarts.use([
   TitleComponent,
   TooltipComponent,
@@ -67,8 +68,8 @@ echarts.use([
 ])
 
 /**
- * Echarts hooks函数
- * @description 按需引入图表组件，没注册的组件需要先引入
+ * ECharts 图表组合式函数。
+ * 使用前如果引入了新的图表类型或组件，需要先在本文件顶部完成注册。
  */
 export function useEcharts(ref: string, chartOptions: Ref<ECOption>) {
   const el = useTemplateRef<HTMLLIElement>(ref)
@@ -95,6 +96,7 @@ export function useEcharts(ref: string, chartOptions: Ref<ECOption>) {
         return
 
       chart = echarts.init(el.value, 'light')
+      // 背景始终保持透明，避免和卡片容器的底色策略冲突。
       chart.setOption({ backgroundColor: 'transparent', ...chartOptions.value })
     }
     finally {
@@ -119,6 +121,7 @@ export function useEcharts(ref: string, chartOptions: Ref<ECOption>) {
       destroy()
       return
     }
+    // 尺寸变化优先走 resize；首次拿到有效尺寸时再真正初始化图表实例。
     if (isRendered() && newWidth && newHeight)
       chart?.resize()
     else

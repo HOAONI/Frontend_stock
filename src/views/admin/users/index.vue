@@ -12,6 +12,7 @@ import {
 } from '@/api/admin-users'
 import type { AdminUserItem, AdminUserStatus } from '@/types/admin-users'
 
+// 用户管理页围绕列表、详情、编辑和重置密码四条操作流展开。
 const loading = ref(false)
 const submitting = ref(false)
 const keyword = ref('')
@@ -121,6 +122,7 @@ async function loadRows(reset = false) {
     page.value = 1
   loading.value = true
   try {
+    // 查询条件全部在这里归一，避免按钮点击和翻页各自拼参数。
     const result = await listAdminUsers({
       keyword: keyword.value.trim() || undefined,
       status: status.value || undefined,
@@ -184,6 +186,7 @@ async function openEdit() {
 
   try {
     const detail = await getAdminUserDetail(selectedUserId.value)
+    // 编辑弹窗始终使用最新详情，避免列表字段不全导致误改。
     editMode.value = 'edit'
     editForm.id = detail.id
     editForm.username = detail.username
@@ -447,6 +450,7 @@ onMounted(async () => {
     </n-card>
 
     <n-card size="small" class="admin-users-table-card">
+      <!-- 表格承担主选择器角色，右侧抽屉和顶部按钮都依赖当前选中项。 -->
       <n-data-table
         class="admin-users-table"
         :loading="loading"
@@ -471,7 +475,13 @@ onMounted(async () => {
     <n-drawer v-model:show="detailVisible" :width="520">
       <n-drawer-content title="用户详情" closable>
         <n-spin :show="detailLoading">
-          <n-descriptions v-if="detailData" :column="1" bordered>
+          <n-descriptions
+            v-if="detailData"
+            class="user-detail-descriptions"
+            :column="1"
+            bordered
+            label-placement="left"
+          >
             <n-descriptions-item label="ID">
               {{ detailData.id }}
             </n-descriptions-item>
@@ -583,6 +593,20 @@ onMounted(async () => {
 
 .user-selection-alert {
   border-radius: 12px;
+}
+
+.user-detail-descriptions :deep(.n-descriptions-table-header) {
+  width: 136px;
+  min-width: 136px;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.user-detail-descriptions :deep(.n-descriptions-table-content) {
+  vertical-align: top;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 :deep(.admin-users-table .selected-user-row > td) {

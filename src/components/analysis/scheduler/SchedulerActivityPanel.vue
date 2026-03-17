@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 调度中心活动面板负责展示近期任务动态和关键时间线。
 import type { SchedulerActivityItem } from '@/types/analysis-scheduler-view'
 
 defineProps<{

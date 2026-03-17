@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 站点 Logo 组件负责展示系统标识和品牌入口。
 import { useAppStore } from '@/store'
 
 const router = useRouter()

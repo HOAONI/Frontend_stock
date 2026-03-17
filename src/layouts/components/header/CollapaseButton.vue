@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 侧栏折叠按钮负责切换主布局的菜单展开状态。
 import { useAppStore } from '@/store'
 
 const appStore = useAppStore()

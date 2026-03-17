@@ -1,3 +1,4 @@
+/** Agent 阶段展示工具，负责把阶段状态转换为标签、文案和说明。 */
 import type { AgentStageCode, AgentStageItem, AgentStageResult, AgentStageStatus } from '@/types/agent-stages'
 
 interface StageSource {

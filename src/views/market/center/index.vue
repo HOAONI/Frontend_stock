@@ -2,12 +2,13 @@
 import { useEcharts } from '@/hooks/useEcharts'
 import type { ECOption } from '@/hooks/useEcharts'
 import { BREAKPOINT_SPAN, CARD_DENSITY, CHART_HEIGHT, DASHBOARD_LAYOUT, GRID_GAP, SPACING } from '@/constants/design-tokens'
-import { trendSemanticType, trendValueStyle } from '@/constants/semantic-ui'
+import { trendValueStyle } from '@/constants/semantic-ui'
 import type { FactorSnapshot, IntradayPoint } from '@/types/market-analytics'
 import { fetchMarketBundle, fetchQuoteOnly } from '@/services/market-service'
-import { formatDateTime, formatPct, validateStockCode } from '@/utils/stock'
+import { formatDateTime, validateStockCode } from '@/utils/stock'
 import type { CSSProperties } from 'vue'
 
+// 行情中心 = 全量行情加载 + 分时轮询刷新，两套数据源最终汇总到同一块看板里。
 const stockCode = ref('600519')
 const days = ref(120)
 const loading = ref(false)
@@ -50,6 +51,7 @@ function startPolling() {
   if (!autoRefresh.value)
     return
 
+  // 自动刷新只补最新价和分时点，不重复拉取整段历史 K 线。
   refreshTimer = window.setInterval(async () => {
     await refreshQuoteOnly()
   }, 5000)
@@ -98,12 +100,6 @@ const sourceText = computed(() => {
     return '派生数据'
   return '模拟数据'
 })
-
-const quoteChangeType = computed(() => trendSemanticType(quote.value?.changePercent, {
-  positive: 'error',
-  negative: 'success',
-  neutral: 'info',
-}))
 
 interface MarketKpiCard {
   key: string
@@ -301,6 +297,7 @@ async function loadMarket() {
   warnings.value = []
   missingApis.value = []
   try {
+    // 全量加载负责同步 quote / bars / factors 三类数据，并重建两张图表。
     const result = await fetchMarketBundle(normalized.normalized, days.value)
     sourceTag.value = result.dataSource
     warnings.value = result.warnings
@@ -420,11 +417,12 @@ onUnmounted(() => {
     </n-card>
 
     <n-grid :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.outerGap" :y-gap="DASHBOARD_LAYOUT.outerGap" responsive="screen">
+      <!-- 先给出最常看的四个 KPI，避免用户必须先读表或图。 -->
       <n-grid-item
         v-for="item in marketKpiCards"
         :key="item.key"
         :span="BREAKPOINT_SPAN.mobile"
-        :m-span="BREAKPOINT_SPAN.desktop2"
+        :m-span="BREAKPOINT_SPAN.desktop4"
         :l-span="BREAKPOINT_SPAN.desktop4"
       >
         <n-card embedded :size="CARD_DENSITY.embedded">
@@ -453,31 +451,95 @@ onUnmounted(() => {
       </n-grid-item>
 
       <n-grid-item :span="24" :l-span="8">
+        <!-- 右侧把实时 quote 和派生因子放在一起，方便对照图表快速判断。 -->
         <n-card title="实时行情与因子" size="small">
           <n-space vertical :size="SPACING.md">
             <n-empty v-if="!quote" description="暂无数据" />
-            <n-descriptions v-else bordered :column="1" size="small" label-placement="left">
-              <n-descriptions-item label="股票">
-                {{ quote.stockCode }} - {{ quote.stockName }}
-              </n-descriptions-item>
-              <n-descriptions-item label="最新价">
-                {{ quote.currentPrice }}
-              </n-descriptions-item>
-              <n-descriptions-item label="涨跌幅">
-                <n-tag :type="quoteChangeType">
-                  {{ formatPct(quote.changePercent) }}
-                </n-tag>
-              </n-descriptions-item>
-              <n-descriptions-item label="开盘 / 最高 / 最低">
-                {{ quote.open ?? '--' }} / {{ quote.high ?? '--' }} / {{ quote.low ?? '--' }}
-              </n-descriptions-item>
-              <n-descriptions-item label="成交量">
-                {{ quote.volume ?? '--' }}
-              </n-descriptions-item>
-              <n-descriptions-item label="更新时间">
-                {{ formatDateTime(quote.updateTime) }}
-              </n-descriptions-item>
-            </n-descriptions>
+            <template v-else>
+              <n-grid :cols="24" :x-gap="GRID_GAP.inner" :y-gap="GRID_GAP.inner" responsive="screen">
+                <n-grid-item :span="12" :m-span="6" :l-span="6">
+                  <n-card embedded size="small">
+                    <n-space vertical :size="SPACING.xs">
+                      <n-text depth="3">
+                        最新价
+                      </n-text>
+                      <n-statistic v-if="quote.currentPrice != null" :value="quote.currentPrice" :precision="2" />
+                      <n-text v-else strong>
+                        --
+                      </n-text>
+                    </n-space>
+                  </n-card>
+                </n-grid-item>
+
+                <n-grid-item :span="12" :m-span="6" :l-span="6">
+                  <n-card embedded size="small">
+                    <n-space vertical :size="SPACING.xs">
+                      <n-text depth="3">
+                        涨跌幅
+                      </n-text>
+                      <n-statistic
+                        v-if="quote.changePercent != null"
+                        :value="quote.changePercent"
+                        :precision="2"
+                        :value-style="trendValueStyle(quote.changePercent, { positive: 'error', negative: 'success', neutral: 'info' })"
+                      >
+                        <template #suffix>
+                          %
+                        </template>
+                      </n-statistic>
+                      <n-text v-else strong>
+                        --
+                      </n-text>
+                    </n-space>
+                  </n-card>
+                </n-grid-item>
+
+                <n-grid-item :span="12" :m-span="6" :l-span="6">
+                  <n-card embedded size="small">
+                    <n-space vertical :size="SPACING.xs">
+                      <n-text depth="3">
+                        涨跌额
+                      </n-text>
+                      <n-statistic
+                        v-if="quote.change != null"
+                        :value="quote.change"
+                        :precision="2"
+                        :value-style="trendValueStyle(quote.change, { positive: 'error', negative: 'success', neutral: 'info' })"
+                      />
+                      <n-text v-else strong>
+                        --
+                      </n-text>
+                    </n-space>
+                  </n-card>
+                </n-grid-item>
+
+                <n-grid-item :span="12" :m-span="6" :l-span="6">
+                  <n-card embedded size="small">
+                    <n-space vertical :size="SPACING.xs">
+                      <n-text depth="3">
+                        成交量
+                      </n-text>
+                      <n-statistic v-if="quote.volume != null" :value="quote.volume" :precision="0" />
+                      <n-text v-else strong>
+                        --
+                      </n-text>
+                    </n-space>
+                  </n-card>
+                </n-grid-item>
+              </n-grid>
+
+              <n-descriptions bordered :column="1" size="small" label-placement="left">
+                <n-descriptions-item label="股票">
+                  {{ quote.stockCode }} - {{ quote.stockName }}
+                </n-descriptions-item>
+                <n-descriptions-item label="开盘 / 最高 / 最低">
+                  {{ quote.open ?? '--' }} / {{ quote.high ?? '--' }} / {{ quote.low ?? '--' }}
+                </n-descriptions-item>
+                <n-descriptions-item label="更新时间">
+                  {{ formatDateTime(quote.updateTime) }}
+                </n-descriptions-item>
+              </n-descriptions>
+            </template>
 
             <n-grid :cols="24" :x-gap="GRID_GAP.inner" :y-gap="GRID_GAP.inner" responsive="screen">
               <n-grid-item v-for="factor in factorCards" :key="factor.label" :span="12">

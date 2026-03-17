@@ -1,3 +1,4 @@
+/** 权限指令负责按角色或权限控制局部 DOM 的展示。 */
 import type { App, Directive } from 'vue'
 import { usePermission } from '@/hooks'
 

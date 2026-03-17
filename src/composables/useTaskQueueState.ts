@@ -1,6 +1,7 @@
 import type { TaskInfo, TaskSeenAtMap, TaskTerminalStatus } from '@/types/analysis'
 
 const RECENT_TASK_LIMIT = 20
+// SSE 事件和快照同步之间允许短暂重叠，避免终态任务被旧快照瞬间“抹掉”。
 const EVENT_PROTECT_WINDOW_MS = 30_000
 
 function isRunningStatus(status: TaskInfo['status']): boolean {
@@ -58,6 +59,7 @@ export function useTaskQueueState() {
       [task.taskId]: now,
     }
 
+    // 运行中的任务始终以最新事件为准，并从 recent 区移除旧终态快照。
     if (isRunningStatus(task.status)) {
       runningTaskMap.value = {
         ...runningTaskMap.value,
@@ -107,6 +109,7 @@ export function useTaskQueueState() {
         return
 
       const seenAt = nextSeenAt[task.taskId] || 0
+      // 保护窗口内更相信事件流，等后续快照追上再自然收敛。
       if (now - seenAt <= EVENT_PROTECT_WINDOW_MS)
         nextRunning[task.taskId] = task
     })

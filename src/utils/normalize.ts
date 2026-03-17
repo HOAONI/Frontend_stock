@@ -1,11 +1,11 @@
 /**
- * 统一化存储单位，字节转化为英文缩写`bytes`, `KB`, `MB`, `GB`
+ * 把字节数转换成人类可读的容量单位字符串。
  *
- * @param {number} bytes 需要转换的字节大小
- * @returns {string} 转化后的字节字符串
+ * @param bytes 需要转换的字节大小
+ * @returns 转换后的容量字符串
  * @example
  * ```
- * // Output: '1 MB'
+ * // 输出：'1 MB'
  * normalizeSizeUnits(1048576)
  * ```
  */

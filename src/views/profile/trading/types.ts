@@ -1,3 +1,4 @@
+/** 交易账户中心内部类型定义，描述卡片、表格和标签页所需视图模型。 */
 import type { DataTableColumns } from 'naive-ui'
 import type { CSSProperties } from 'vue'
 

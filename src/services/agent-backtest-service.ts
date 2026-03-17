@@ -19,6 +19,7 @@ export interface AgentBacktestHistoryInput {
   limit?: number
 }
 
+// Agent 回放历史接口也统一补 total/page/items 默认值，减少页面分支。
 function ensureListResponse(data: AgentBacktestHistoryResponse): AgentBacktestHistoryResponse {
   return {
     total: Number(data.total || 0),

@@ -1,3 +1,4 @@
+/** 后台用户管理相关类型定义，供接口层和管理页复用。 */
 export type AdminUserStatus = 'active' | 'disabled'
 
 export interface AdminUserRoleItem {

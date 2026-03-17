@@ -1,3 +1,4 @@
+/** 接口字段格式兼容工具，负责把后端返回的下划线键名转换为驼峰键名。 */
 function isPlainObject(input: unknown): input is Record<string, unknown> {
   return Object.prototype.toString.call(input) === '[object Object]'
 }

@@ -1,3 +1,4 @@
+/** 管理员审计日志接口封装，负责列表查询和单条详情读取。 */
 import type { AdminLogDetail, AdminLogsListResponse, ListAdminLogsParams } from '@/types/admin-logs'
 import client from './client'
 import { toCamelCase } from './case'

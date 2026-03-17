@@ -1,3 +1,4 @@
+/** 布局公共组件导出入口，方便主布局按统一路径引入头部和通用部件。 */
 import BackTop from './common/BackTop.vue'
 import Logo from './common/Logo.vue'
 import MobileDrawer from './common/MobileDrawer.vue'

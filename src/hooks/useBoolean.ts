@@ -1,5 +1,7 @@
 /**
- * boolean组合式函数
+ * 布尔值状态组合式函数。
+ * 适合处理弹窗开关、加载状态等只有真/假两种结果的场景。
+ *
  * @param initValue 初始值
  */
 export function useBoolean(initValue = false) {

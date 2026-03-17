@@ -11,9 +11,11 @@ import { formatDateTime, validateStockCode } from '@/utils/stock'
 import { useThemeVars } from 'naive-ui'
 import type { CSSProperties } from 'vue'
 
+// 分析中心同时承载任务提交、流式队列、历史报告和阶段详情，所以状态会拆得比较细。
 const brokerAccountStore = useBrokerAccountStore()
 const themeVars = useThemeVars()
 
+// 提交区状态。
 const stockCode = ref('')
 const inputError = ref('')
 const duplicateError = ref('')
@@ -44,6 +46,7 @@ const reportLoading = ref(false)
 const selectedReport = ref<AnalysisReport | null>(null)
 const selectedNews = ref<NewsIntelItem[]>([])
 
+// 详情区和历史弹窗共用同一套阶段解析能力，但各自维护独立状态，避免互相覆盖。
 const stageItems = ref<AgentStageItem[]>([])
 const stageSource = ref<'api' | 'mock' | 'derived'>('derived')
 const stageMissingApis = ref<string[]>([])
@@ -215,6 +218,7 @@ const { isConnected } = useTaskStream({
 
 function startFallbackPolling() {
   stopFallbackPolling()
+  // SSE 断开时退回短轮询，保证任务面板仍能持续更新。
   fallbackPollTimer = window.setInterval(() => {
     if (!isConnected.value)
       void refreshTasks({ reason: 'poll_fallback', silent: true })
@@ -318,6 +322,7 @@ const recentResultItems = computed<RecentResultDisplayItem[]>(() => {
     const matched = hasBestMatch && minTimeDiff <= RECENT_REPORT_MATCH_WINDOW_MS
     const matchedQueryId = matched ? bestMatchQueryId : null
 
+    // 完成态任务和历史报告不是同一接口来源，这里用股票代码 + 时间窗口做近似匹配。
     items.push({
       taskId: task.taskId,
       stockCode: task.stockCode,
@@ -422,6 +427,7 @@ async function openReportModalByQueryId(queryId: string) {
 
   try {
     const bundle = await loadReportDetailBundle(queryId)
+    // 弹窗快速切换时只接受最后一次请求结果，避免旧响应回写当前内容。
     if (currentSeq !== modalLoadSeq)
       return
     recentReportModalReport.value = bundle.report
@@ -562,6 +568,7 @@ async function submitAnalysis() {
       reportType: 'detailed',
       executionMode: executionMode.value,
     })
+    // 提交成功后立刻刷新任务队列，后续再由 SSE/轮询持续把状态补齐。
     stockCode.value = ''
     window.$message.success('分析任务已提交')
     await refreshTasks({ reason: 'submit', silent: true })
@@ -614,6 +621,7 @@ onUnmounted(() => {
 
 <template>
   <n-space vertical :size="SPACING.lg">
+    <!-- 顶部只负责发起分析任务；运行态和历史态展示放在下面两个区块。 -->
     <n-grid :cols="24" :x-gap="GRID_GAP.outer" :y-gap="GRID_GAP.outer" responsive="screen">
       <n-grid-item :span="24" :l-span="24">
         <n-card title="提交分析任务" :size="CARD_DENSITY.default">
@@ -674,6 +682,7 @@ onUnmounted(() => {
     <n-grid :cols="24" :x-gap="GRID_GAP.outer" :y-gap="GRID_GAP.outer" responsive="screen">
       <n-grid-item :span="24" :l-span="8">
         <n-space vertical :size="SPACING.lg">
+          <!-- 左侧聚焦“现在”：运行中任务和最近完成结果。 -->
           <n-card title="运行中任务" :size="CARD_DENSITY.default">
             <template #header-extra>
               <n-space align="center" :size="SPACING.sm">
@@ -763,6 +772,7 @@ onUnmounted(() => {
       </n-grid-item>
 
       <n-grid-item :span="24" :l-span="16">
+        <!-- 右侧聚焦“详情”：历史报告、阶段数据和新闻情报共用一个详情面板。 -->
         <n-card title="分析报告详情" :size="CARD_DENSITY.default">
           <template #header-extra>
             <n-popover trigger="hover">

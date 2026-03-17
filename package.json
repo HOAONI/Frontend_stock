@@ -42,8 +42,9 @@
     "build": "vite build",
     "build:dev": "vite build --mode dev",
     "icons:generate-runtime": "node scripts/generate-runtime-icons.mjs",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
     "preview": "vite preview --port 9981",
-    "lint": "eslint . && vue-tsc --noEmit",
+    "lint": "eslint . && pnpm run typecheck",
     "lint:fix": "eslint . --fix",
     "lint:check": "npx @eslint/config-inspector",
     "sizecheck": "npx vite-bundle-visualizer"

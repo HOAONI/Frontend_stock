@@ -15,6 +15,7 @@ import TradingAccountSummaryCard from './components/TradingAccountSummaryCard.vu
 import { useTradingAccountCenterViewModel } from './composables/useTradingAccountCenterViewModel'
 import type { TradingAddFundsFormModel, TradingBindFormModel } from './types'
 
+// 交易账户中心负责串起绑定、入金、快照刷新三类交互，展示模型由 view-model composable 提供。
 const brokerAccountStore = useBrokerAccountStore()
 const tradingAccountStore = useTradingAccountStore()
 
@@ -169,6 +170,7 @@ async function bindSimulationAccountNow() {
 
   binding.value = true
   try {
+    // 绑定成功后立即强制刷新快照，确保首页和交易中心看到的是同一份最新账户状态。
     await brokerAccountStore.bindSimulation({
       accountUid: bindForm.accountUid.trim() || undefined,
       accountDisplayName: bindForm.accountDisplayName.trim() || undefined,
@@ -233,6 +235,7 @@ watch(() => addFundsForm.amount, (value) => {
 
 <template>
   <n-space vertical :size="SPACING.lg">
+    <!-- 首屏先展示账户身份和快捷操作，便于判断当前模拟盘是否可用。 -->
     <n-grid :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.outerGap" :y-gap="DASHBOARD_LAYOUT.outerGap" responsive="screen">
       <n-grid-item :span="24" :l-span="12">
         <TradingAccountHeroCard
@@ -276,6 +279,7 @@ watch(() => addFundsForm.amount, (value) => {
 
     <n-grid :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.outerGap" :y-gap="DASHBOARD_LAYOUT.outerGap" responsive="screen">
       <n-grid-item :span="24" :l-span="14">
+        <!-- 左侧承载初始化和入金，是主要操作区。 -->
         <div ref="setupSection">
           <TradingAccountSetupCard
             v-model:form="bindForm"
@@ -291,6 +295,7 @@ watch(() => addFundsForm.amount, (value) => {
       </n-grid-item>
 
       <n-grid-item :span="24" :l-span="10">
+        <!-- 右侧承载入金卡片，与初始化卡相邻方便连续操作。 -->
         <div ref="fundingSection">
           <TradingAccountFundingCard
             v-model:form="addFundsForm"
@@ -305,6 +310,7 @@ watch(() => addFundsForm.amount, (value) => {
     </n-grid>
 
     <n-grid :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.outerGap" :y-gap="DASHBOARD_LAYOUT.outerGap" responsive="screen">
+      <!-- 下半区集中展示摘要、最近委托和最近成交，方便绑定后立即验收快照。 -->
       <n-grid-item :span="24" :l-span="8">
         <TradingAccountSummaryCard
           :ready="canLoadTradingData"

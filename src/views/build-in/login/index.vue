@@ -3,6 +3,7 @@ import type { RegisterAccountType } from '@/types/auth'
 import { HOME_PATH } from '@/constants/home-path'
 import { useSessionStore } from '@/store'
 
+// 登录页同时承载登录与自助注册，两套表单共享同一份会话状态来源。
 const router = useRouter()
 const route = useRoute()
 const sessionStore = useSessionStore()
@@ -113,6 +114,7 @@ async function submitRegister() {
 
   if (!result.success) {
     registerError.value = result.error || '注册失败，请稍后重试'
+    // 注册失败时清空密码，避免在错误原因未知的情况下保留敏感输入。
     registerForm.password = ''
     registerForm.confirmPassword = ''
     return

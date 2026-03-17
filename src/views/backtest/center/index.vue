@@ -38,6 +38,7 @@ import type {
 } from '@/types/backtest-strategy'
 import { session } from '@/utils'
 
+// 回测中心同时承载策略回测与 Agent 回放，并负责本地快照恢复与结果轮询。
 type BacktestMode = 'strategy' | 'agent'
 type StrategyPendingRequest = App.BacktestCenterStrategyPendingRequest
 type AgentPendingRequest = App.BacktestCenterAgentPendingRequest
@@ -82,6 +83,7 @@ const AGENT_LLM_PROVIDER_LABELS: Record<string, string> = {
   custom: '自定义兼容接口',
 }
 
+// 公共输入参数。
 const mode = ref<BacktestMode>('strategy')
 
 const code = ref('')
@@ -112,6 +114,7 @@ const strategyForm = reactive<{
   params: {},
 })
 
+// Agent 专属运行参数。
 const agentPositionMaxPct = ref<number | null>(30)
 const agentStopLossPct = ref<number | null>(8)
 const agentTakeProfitPct = ref<number | null>(15)
@@ -577,6 +580,7 @@ function buildBacktestSnapshot(): App.BacktestCenterSessionState {
 function persistBacktestSnapshot() {
   if (hydratingSnapshot.value)
     return
+  // 每次关键状态变化后都持久化，页面刷新后可以恢复到最近一次查看/运行上下文。
   session.set('backtestCenter', buildBacktestSnapshot())
 }
 
@@ -1031,6 +1035,7 @@ async function restoreStrategyPendingRun(showNotice = true): Promise<boolean> {
       && isPendingCreatedAtMatch(item.createdAt, pending.startedAt),
     )
 
+    // 回测任务可能在页面刷新期间完成，这里根据“请求签名”从历史里找回对应结果。
     if (!match) {
       if (showNotice)
         recoveryNotice.value = '上次回测结果未匹配到，请刷新历史查看'
@@ -1221,6 +1226,7 @@ async function runBacktest() {
   running.value = true
   try {
     recoveryNotice.value = ''
+    // 新一轮回测开始前先清空当前展示，并写入 pending 快照，便于刷新后继续恢复。
     clearCurrentDisplay()
     if (mode.value === 'strategy') {
       strategyActiveRunGroupId.value = null
@@ -1507,6 +1513,7 @@ onBeforeUnmount(() => {
   <n-space vertical :size="SPACING.md">
     <n-grid :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.outerGap" :y-gap="DASHBOARD_LAYOUT.outerGap" responsive="screen">
       <n-grid-item :span="24">
+        <!-- 顶部参数区统一管理策略回测和 Agent 回放的公共输入。 -->
         <n-card title="回测中心" :size="CARD_DENSITY.default">
           <n-space vertical :size="SPACING.md">
             <n-space :size="SPACING.sm" align="center">
@@ -1669,6 +1676,7 @@ onBeforeUnmount(() => {
 
     <n-grid :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.outerGap" :y-gap="DASHBOARD_LAYOUT.outerGap" responsive="screen">
       <n-grid-item :span="24" :l-span="12">
+        <!-- 左侧优先展示当前运行摘要，便于快速确认本次回测的输入和核心结果。 -->
         <n-card :title="mode === 'strategy' ? '运行摘要' : '回放摘要'" :size="CARD_DENSITY.default">
           <template v-if="mode === 'strategy'">
             <n-empty v-if="!currentStrategyRun" description="暂无回测结果" />

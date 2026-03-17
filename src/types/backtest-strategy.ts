@@ -1,3 +1,4 @@
+// 策略回测中心使用的模板、用户策略和运行结果数据结构。
 export type BacktestStrategyTemplateCode = 'ma_cross' | 'rsi_threshold'
 
 export interface BacktestStrategyTemplateParamSchema {

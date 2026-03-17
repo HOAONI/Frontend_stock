@@ -1,3 +1,4 @@
+/** 管理员审计日志相关类型定义，供日志列表和详情页复用。 */
 export interface AdminLogItem {
   id: number
   requestId?: string | null

@@ -1,3 +1,4 @@
+/** Agent 分析阶段相关类型定义，统一描述阶段编码、状态和结果结构。 */
 export type AgentStageCode = 'data' | 'signal' | 'risk' | 'execution'
 
 export type AgentStageStatus = 'pending' | 'done' | 'failed'

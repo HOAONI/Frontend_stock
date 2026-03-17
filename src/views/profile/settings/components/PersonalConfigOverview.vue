@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 个人配置总览卡片负责汇总账户、AI 和安全状态的当前快照。
 import type { PersonalConfigStatusTag } from '../types'
 
 const props = defineProps<{

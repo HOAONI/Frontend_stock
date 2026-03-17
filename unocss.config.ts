@@ -1,6 +1,7 @@
+/** UnoCSS 配置文件，集中维护原子化样式预设、快捷类和转换器。 */
 import { defineConfig, presetAttributify, presetUno, transformerVariantGroup } from 'unocss'
 
-// https://github.com/unocss/unocss
+// 官方文档：https://github.com/unocss/unocss
 
 export default defineConfig({
   presets: [presetUno({ dark: 'class' }), presetAttributify()],

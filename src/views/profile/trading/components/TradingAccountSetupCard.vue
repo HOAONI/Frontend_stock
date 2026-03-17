@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 交易账户初始化卡片负责引导用户完成模拟盘绑定和校验。
 import { CARD_DENSITY, SPACING } from '@/constants/design-tokens'
 import type { TradingBindFormModel, TradingUiType } from '../types'
 

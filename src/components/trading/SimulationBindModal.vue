@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useBrokerAccountStore, useTradingAccountStore } from '@/store'
 
+// 全局弹窗版的模拟盘初始化入口，给需要“先绑定再继续”的页面复用。
 const props = withDefaults(defineProps<{
   show?: boolean
 }>(), {
@@ -77,6 +78,7 @@ async function bindNow() {
       slippageBps: Number(bindForm.slippageBps),
     })
 
+    // 绑定完成后补拉账户快照，避免关闭弹窗后页面仍显示旧状态。
     await Promise.allSettled([
       tradingAccountStore.loadOverview({ refresh: true }),
       tradingAccountStore.loadDetails({ refresh: true }),
@@ -100,6 +102,7 @@ watch(() => props.show, (visible) => {
 
   brokerAccountStore.clearBindError()
 
+  // 每次重新打开都尽量用最近一次绑定状态预填，减少重复输入。
   const status = brokerAccountStore.simulationStatus
   if (!bindForm.accountUid.trim() && status?.accountUid)
     bindForm.accountUid = status.accountUid

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 应用初始化组件负责按顺序注册状态、路由和全局模块，再渲染主界面。
 import type { App } from 'vue'
 import NaiveProvider from '@/components/common/NaiveProvider.vue'
 import { installRouter } from '@/router'

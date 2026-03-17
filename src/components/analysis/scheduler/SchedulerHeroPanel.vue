@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 调度中心顶部概览面板负责展示当前视角的核心指标和摘要。
 import type {
   SchedulerHeroView,
   SchedulerMetricItem,

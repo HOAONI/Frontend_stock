@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 404 页面负责在路由未命中时提示用户返回有效入口。
 const router = useRouter()
 </script>
 

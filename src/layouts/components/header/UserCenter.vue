@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 用户中心下拉组件负责展示当前用户信息和常用账户操作。
 import { useSessionStore } from '@/store'
 import { renderIcon } from '@/utils/icon'
 

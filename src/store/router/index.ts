@@ -1,3 +1,4 @@
+/** 路由 store 负责缓存菜单、原始路由和当前高亮菜单状态。 */
 import type { MenuOption } from 'naive-ui'
 import { router } from '@/router'
 import { staticRoutes } from '@/router/routes.static'
@@ -27,7 +28,7 @@ export const useRouteStore = defineStore('route-store', {
       if (router.hasRoute('appRoot'))
         router.removeRoute('appRoot')
     },
-    // set the currently highlighted menu key
+    // 设置当前高亮菜单 key，供侧边栏和面包屑同步状态。
     setActiveMenu(key: string) {
       this.activeMenu = key
     },
@@ -38,11 +39,11 @@ export const useRouteStore = defineStore('route-store', {
         const rowRoutes = staticRoutes
         this.rowRoutes = rowRoutes
 
-        // Generate actual route and insert
+        // 生成真实路由并注入到路由实例。
         const routes = createRoutes(rowRoutes)
         router.addRoute(routes)
 
-        // Generate side menu
+        // 根据原始路由生成侧边菜单。
         this.menus = createMenus(rowRoutes)
 
         this.isInitAuthRoute = true

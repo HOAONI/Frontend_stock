@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 交易账户详情标签页负责在多个明细视图之间切换。
 import { CARD_DENSITY, SPACING } from '@/constants/design-tokens'
 import type { TradingAccountDetailTabModel } from '../types'
 

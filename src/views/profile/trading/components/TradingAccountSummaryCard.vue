@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 交易账户摘要卡片负责展示资产、收益和仓位等聚合结果。
 import { CARD_DENSITY, SPACING } from '@/constants/design-tokens'
 import type { TradingAccountCountItem, TradingAccountRatioItem } from '../types'
 

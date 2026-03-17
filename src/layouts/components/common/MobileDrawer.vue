@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 移动端侧边抽屉负责承接小屏导航菜单。
 import UserCenter from '../header/UserCenter.vue'
 
 const showDrawer = defineModel<boolean>('show', { default: false })

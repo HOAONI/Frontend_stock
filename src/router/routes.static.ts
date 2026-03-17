@@ -1,3 +1,4 @@
+// 静态路由表负责定义后台菜单结构、权限和页面组件映射。
 export const staticRoutes: AppRoute.RowRoute[] = [
   {
     name: 'home',

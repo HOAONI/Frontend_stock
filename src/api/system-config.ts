@@ -1,3 +1,4 @@
+/** 系统配置接口封装，负责读取配置、校验草稿和提交更新。 */
 import type {
   SystemConfigConflictResponse,
   SystemConfigResponse,

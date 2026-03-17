@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 交易账户 KPI 卡片负责展示单个关键指标及其辅助说明。
 import { CARD_DENSITY, SPACING } from '@/constants/design-tokens'
 import type { TradingAccountKpiModel } from '../types'
 

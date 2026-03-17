@@ -1,3 +1,4 @@
+/** 策略回测接口封装，负责运行回测、管理策略模板和用户策略。 */
 import client from './client'
 import { toCamelCase } from './case'
 import type {

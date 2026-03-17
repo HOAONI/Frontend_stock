@@ -1,3 +1,4 @@
+/** 首页路径常量，集中维护登录后默认跳转入口。 */
 const DEFAULT_HOME_PATH = '/home'
 
 function normalizeHomePath(path: string | undefined): string {

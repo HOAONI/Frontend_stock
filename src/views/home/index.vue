@@ -7,6 +7,7 @@ import { useBrokerAccountStore, useSessionStore, useTradingAccountStore } from '
 import { formatDateTime } from '@/utils/stock'
 import { h } from 'vue'
 
+// 首页只展示最关键的账户状态和近期交易活动，不在这里承载复杂操作流。
 interface ActivityRow {
   id: string
   stockCode: string
@@ -71,6 +72,7 @@ const overviewHint = computed(() => {
   return '数据源已连接，可快速进入分析与交易流程。'
 })
 
+// 部分后端不会直接返回 marketValue，这里用 totalAsset - cash 兜底给占比卡片使用。
 const marketValueForRatio = computed(() => {
   if (homeKpis.value.marketValue != null)
     return Math.max(homeKpis.value.marketValue, 0)
@@ -186,6 +188,7 @@ async function loadDashboard(refresh = false, silent = false) {
   try {
     await brokerAccountStore.loadSimulationStatus()
 
+    // 只有模拟盘完成绑定且通过校验后，首页才拉取完整交易快照。
     if (canLoadTradingData.value) {
       const result = await tradingAccountStore.loadAll({ refresh })
       if (!result.success && !silent && result.error && result.error !== 'stale_request')
@@ -225,6 +228,7 @@ onMounted(async () => {
               欢迎回来，{{ userLabel }}。{{ overviewHint }}
             </n-text>
 
+            <!-- 桌面端使用双层卡片布局，优先把资产、盈亏和仓位结构放在首屏。 -->
             <template v-if="!isMobile">
               <n-grid :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.innerGap" :y-gap="DASHBOARD_LAYOUT.innerGap">
                 <n-grid-item :span="BREAKPOINT_SPAN.desktop4">
@@ -316,6 +320,7 @@ onMounted(async () => {
               </n-grid>
             </template>
 
+            <!-- 移动端改为单列堆叠，减少窄屏下的统计卡拥挤。 -->
             <template v-else>
               <n-grid :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.innerGap" :y-gap="DASHBOARD_LAYOUT.innerGap">
                 <n-grid-item :span="24">
@@ -524,6 +529,7 @@ onMounted(async () => {
     </n-grid>
 
     <n-space v-else vertical :size="SPACING.lg">
+      <!-- 移动端把近期委托和成交拆成两个列表，避免横向表格挤压。 -->
       <n-card title="近期委托">
         <n-empty v-if="!homeRecentOrders.length" description="暂无委托数据" />
         <n-list v-else hoverable>

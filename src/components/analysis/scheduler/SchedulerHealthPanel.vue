@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 调度中心健康面板负责汇总执行器、队列和接口的健康状态。
 import type {
   SchedulerFieldItem,
   SchedulerHealthItem,

@@ -1,3 +1,4 @@
+/** 认证接口封装，负责登录、注册、密码修改和会话状态查询。 */
 import type {
   AuthStatusResponse,
   ChangePasswordRequest,

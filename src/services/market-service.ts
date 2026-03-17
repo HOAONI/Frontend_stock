@@ -40,6 +40,7 @@ function buildModel(stockCode: string, bars: StockHistoryPoint[], quote: Awaited
   }
 }
 
+// 行情中心优先消费真实接口；指标/因子接口缺失时回退前端派生结果，避免整页失效。
 export async function fetchMarketBundle(stockCode: string, days: number): Promise<ServicePayload<MarketViewModel>> {
   const mode = getDataMode()
   const missingApis: string[] = []
@@ -90,6 +91,7 @@ export async function fetchMarketBundle(stockCode: string, days: number): Promis
     }
   }
 
+  // MA60 等指标至少需要一定样本，样本不足时让前端明确给出提示而不是静默异常。
   if (bars.length < 60)
     warnings.push('历史样本不足，部分指标可能为空')
 

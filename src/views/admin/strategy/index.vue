@@ -11,6 +11,7 @@ import {
 } from '@/api/system-config'
 import { getSystemConfigFieldDisplay } from '@/utils/system-config-display'
 
+// 管理端策略参数页只暴露与基础运行和回测直接相关的系统配置项。
 const loading = ref(false)
 const saving = ref(false)
 const filter = ref('')
@@ -108,6 +109,7 @@ async function saveCurrent() {
       value: editValue.value,
     }]
 
+    // 先走后端校验，再执行保存，避免抽屉里只能看到通用失败提示。
     const validation = await validateSystemConfig({ items: changed })
     if (!validation.valid) {
       editIssues.value = validation.issues.map(issue => issue.message)
@@ -200,6 +202,7 @@ onMounted(load)
     </n-card>
 
     <n-card size="small" title="参数列表">
+      <!-- 列表只承担入口职责，详细说明和编辑统一放到右侧抽屉。 -->
       <n-data-table
         :loading="loading"
         :columns="columns"
@@ -213,7 +216,13 @@ onMounted(load)
       <n-drawer-content title="编辑策略参数" closable>
         <template v-if="currentItem">
           <n-space vertical :size="12">
-            <n-descriptions :column="1" bordered size="small">
+            <n-descriptions
+              class="config-detail-descriptions"
+              :column="1"
+              bordered
+              size="small"
+              label-placement="left"
+            >
               <n-descriptions-item label="参数名称">
                 {{ getSystemConfigFieldDisplay(currentItem).title }}
               </n-descriptions-item>
@@ -227,7 +236,9 @@ onMounted(load)
                 {{ getSystemConfigFieldDisplay(currentItem).dataTypeLabel }}
               </n-descriptions-item>
               <n-descriptions-item label="用途说明">
-                {{ getSystemConfigFieldDisplay(currentItem).description || '暂未提供用途说明' }}
+                <span class="config-detail-value">
+                  {{ getSystemConfigFieldDisplay(currentItem).description || '暂未提供用途说明' }}
+                </span>
               </n-descriptions-item>
             </n-descriptions>
 
@@ -288,5 +299,27 @@ onMounted(load)
   font-size: 13px;
   line-height: 1.5;
   white-space: normal;
+}
+
+.config-detail-value {
+  display: block;
+  line-height: 1.6;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.config-detail-descriptions :deep(.n-descriptions-table-header) {
+  width: 136px;
+  min-width: 136px;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.config-detail-descriptions :deep(.n-descriptions-table-content) {
+  vertical-align: top;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 </style>

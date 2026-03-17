@@ -86,6 +86,10 @@ function extractMessage(error: unknown, fallback: string): string {
   return axiosError?.response?.data?.message || fallback
 }
 
+/**
+ * 统一管理交易账户概览、明细和首页快照。
+ * 概览请求和明细请求使用独立的请求编号，避免慢响应覆盖较新的刷新结果。
+ */
 export const useTradingAccountStore = defineStore('trading-account-store', {
   state: (): TradingAccountState => ({
     loadingOverview: false,
@@ -211,6 +215,7 @@ export const useTradingAccountStore = defineStore('trading-account-store', {
           }),
         ])
 
+        // 只接受最新一轮请求的结果，避免手动刷新和自动刷新互相覆盖。
         if (requestId !== this.overviewRequestId) {
           return { success: false, error: 'stale_request' }
         }
@@ -258,6 +263,7 @@ export const useTradingAccountStore = defineStore('trading-account-store', {
           }),
         ])
 
+        // 明细请求和概览请求独立竞态控制，减少局部刷新时的状态抖动。
         if (requestId !== this.detailsRequestId) {
           return { success: false, error: 'stale_request' }
         }
@@ -288,6 +294,7 @@ export const useTradingAccountStore = defineStore('trading-account-store', {
     async loadAll(options: {
       refresh?: boolean
     }): Promise<{ success: boolean, error?: string }> {
+      // 并发拉取概览和明细，页面只关心最终是否可展示完整快照。
       const [overviewResult, detailResult] = await Promise.all([
         this.loadOverview(options),
         this.loadDetails(options),

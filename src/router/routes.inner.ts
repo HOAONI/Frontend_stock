@@ -1,3 +1,4 @@
+/** 内置路由表定义登录页、404 页等无需后端权限的基础路由。 */
 import type { RouteRecordRaw } from 'vue-router'
 
 export const routes: RouteRecordRaw[] = [

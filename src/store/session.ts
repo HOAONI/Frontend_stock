@@ -81,6 +81,10 @@ function normalizeCurrentUser(user: SessionState['currentUser'] | undefined | nu
   }
 }
 
+/**
+ * 会话 store 统一维护登录态、权限和当前用户信息。
+ * 业务页面依赖这里的规范化结果，而不是直接消费原始接口字段。
+ */
 export const useSessionStore = defineStore('session-store', {
   state: (): SessionState => ({
     initialized: false,
@@ -127,6 +131,7 @@ export const useSessionStore = defineStore('session-store', {
       try {
         await login({ username, password })
         await this.fetchStatus()
+        // 登录后重建路由权限，避免沿用上一个用户的菜单缓存。
         const routeStore = useRouteStore()
         routeStore.resetRouteStore()
         return { success: true }
@@ -186,6 +191,7 @@ export const useSessionStore = defineStore('session-store', {
         await logout()
       }
       finally {
+        // 即使后端登出异常，也要先清掉本地权限和用户态，避免 UI 停留在伪登录状态。
         const routeStore = useRouteStore()
         routeStore.resetRouteStore()
         this.loggedIn = false

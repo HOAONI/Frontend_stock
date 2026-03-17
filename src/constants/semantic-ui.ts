@@ -1,3 +1,4 @@
+/** 语义化展示常量，集中维护状态标签、颜色和文案映射。 */
 import type { CSSProperties } from 'vue'
 
 export type SemanticType = 'default' | 'primary' | 'success' | 'warning' | 'error' | 'info'

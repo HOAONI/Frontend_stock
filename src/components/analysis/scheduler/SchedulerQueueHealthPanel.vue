@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 调度中心队列健康面板负责展示队列积压、执行延迟和处理趋势。
 import type {
   SchedulerMetricItem,
   SchedulerQueuePreviewItem,

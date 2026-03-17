@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 调度任务详情抽屉负责展示任务详情、阶段信息和上下文载荷。
 import AgentStagePanel from '@/components/analysis/AgentStagePanel.vue'
 import type { AgentStageItem } from '@/types/agent-stages'
 import type { SchedulerDetailView } from '@/types/analysis-scheduler-view'

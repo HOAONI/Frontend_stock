@@ -12,6 +12,7 @@ import { useSchedulerCenter } from '@/composables/useSchedulerCenter'
 import { GRID_GAP } from '@/constants/design-tokens'
 import type { SchedulerScope } from '@/types/analysis-scheduler'
 
+// 视图层只做面板编排，所有调度中心状态和动作都收口在 useSchedulerCenter 中。
 const {
   actionState,
   activityItems,
@@ -82,6 +83,7 @@ const focusedTaskLabel = computed(() => {
 <template>
   <n-layout embedded>
     <n-space vertical :size="GRID_GAP.outer">
+      <!-- 顶部卡片负责说明当前 scope、刷新状态和管理员视角切换。 -->
       <n-card :bordered="false" size="small">
         <n-flex justify="space-between" align="start" :wrap="true" :size="16">
           <n-space vertical :size="10">
@@ -132,6 +134,7 @@ const focusedTaskLabel = computed(() => {
       </n-card>
 
       <n-grid :cols="24" responsive="screen" :x-gap="GRID_GAP.outer" :y-gap="GRID_GAP.outer">
+        <!-- 上半区展示总览、告警、队列健康和当前焦点任务。 -->
         <n-grid-item :span="24" :l-span="16">
           <SchedulerHeroPanel :view="heroView" :metrics="overviewSummaryCards" />
         </n-grid-item>
@@ -193,6 +196,7 @@ const focusedTaskLabel = computed(() => {
         </n-grid-item>
 
         <n-grid-item :span="24">
+          <!-- 工作台承担筛选、分页和选择任务入口，是列表操作主区域。 -->
           <SchedulerTaskWorkbenchPanel
             v-model:filters="filters"
             :is-admin="heroView.isAdmin"

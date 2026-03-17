@@ -1,3 +1,4 @@
+/** 数据源模式辅助工具，负责判断当前环境使用真实接口还是前端派生数据。 */
 export type DataMode = 'hybrid' | 'api' | 'mock'
 export type DataSourceTag = 'api' | 'mock' | 'derived'
 

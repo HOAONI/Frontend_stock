@@ -1,7 +1,7 @@
-// eslint.config.js
+/** ESLint 配置文件，统一定义项目的 TypeScript 与 Vue 代码规范。 */
 import antfu from '@antfu/eslint-config'
 
-// https://github.com/antfu/eslint-config
+// 官方文档：https://github.com/antfu/eslint-config
 export default antfu(
   {
     typescript: {

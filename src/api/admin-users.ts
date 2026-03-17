@@ -1,3 +1,4 @@
+/** 后台用户管理接口封装，负责列表、详情、增删改和重置密码。 */
 import type {
   AdminUserItem,
   AdminUsersListResponse,

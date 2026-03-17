@@ -7,6 +7,7 @@ import type {
   PersonalConfigPasswordForm,
 } from '../types'
 
+// 详细设置组件只负责承接表单和展示，不承担保存逻辑。
 defineProps<{
   username: string
   displayName: string
@@ -82,10 +83,16 @@ const notificationItems = [
     </template>
 
     <n-tabs v-model:value="activeTab" type="line" animated>
+      <!-- 账号基础信息与本地模拟盘备注。 -->
       <n-tab-pane name="basic" tab="基础信息">
         <n-space vertical :size="16">
           <n-card embedded title="账户身份">
-            <n-descriptions bordered :column="2" label-placement="top">
+            <n-descriptions
+              class="personal-config-detail-descriptions"
+              bordered
+              :column="1"
+              label-placement="left"
+            >
               <n-descriptions-item label="显示名称">
                 {{ displayName }}
               </n-descriptions-item>
@@ -138,6 +145,7 @@ const notificationItems = [
         </n-space>
       </n-tab-pane>
 
+      <!-- 这些字段会写回个人账户配置，作为后续 Agent paper 运行默认值。 -->
       <n-tab-pane name="preferences" tab="运行默认值">
         <n-space vertical :size="16">
           <n-alert type="info">
@@ -183,7 +191,12 @@ const notificationItems = [
           </n-card>
 
           <n-card embedded title="当前浏览器环境">
-            <n-descriptions bordered :column="2" label-placement="top">
+            <n-descriptions
+              class="personal-config-detail-descriptions"
+              bordered
+              :column="1"
+              label-placement="left"
+            >
               <n-descriptions-item label="浏览器">
                 {{ clientInfo.browser }}
               </n-descriptions-item>
@@ -201,6 +214,7 @@ const notificationItems = [
         </n-space>
       </n-tab-pane>
 
+      <!-- 安全中心把改密和 AI 凭据回退状态放在一起，方便统一理解风险面。 -->
       <n-tab-pane name="security" tab="安全中心">
         <n-space vertical :size="16">
           <n-alert :type="requiresProviderReselection ? 'warning' : 'info'">
@@ -211,7 +225,12 @@ const notificationItems = [
           </n-alert>
 
           <n-card embedded title="登录与安全状态">
-            <n-descriptions bordered :column="2" label-placement="top">
+            <n-descriptions
+              class="personal-config-detail-descriptions"
+              bordered
+              :column="1"
+              label-placement="left"
+            >
               <n-descriptions-item label="登录状态">
                 <n-tag type="success" size="small">
                   正常
@@ -309,6 +328,7 @@ const notificationItems = [
         </n-space>
       </n-tab-pane>
 
+      <!-- 通知中心目前仍是只读占位，但布局已经按可扩展的配置面板保留。 -->
       <n-tab-pane name="notifications" tab="通知中心">
         <n-space vertical :size="16">
           <n-alert type="info">
@@ -330,6 +350,7 @@ const notificationItems = [
         </n-space>
       </n-tab-pane>
 
+      <!-- 账号绑定单独处理个人 AI Key，避免和其它账户设置共享提交按钮。 -->
       <n-tab-pane name="integrations" tab="账号绑定">
         <n-space vertical :size="16">
           <n-alert :type="aiSourceAlertType">
@@ -354,7 +375,12 @@ const notificationItems = [
           </n-alert>
 
           <n-card embedded title="系统内置 AI">
-            <n-descriptions bordered :column="2" label-placement="top">
+            <n-descriptions
+              class="personal-config-detail-descriptions"
+              bordered
+              :column="1"
+              label-placement="left"
+            >
               <n-descriptions-item label="系统提供商">
                 {{ systemProviderText }}
               </n-descriptions-item>
@@ -362,7 +388,7 @@ const notificationItems = [
                 {{ systemModelText }}
               </n-descriptions-item>
               <n-descriptions-item label="Base URL">
-                {{ systemBaseUrlText }}
+                <span class="personal-config-detail-value">{{ systemBaseUrlText }}</span>
               </n-descriptions-item>
               <n-descriptions-item label="运行状态">
                 <n-tag :type="systemDefaultStateType" size="small">
@@ -473,3 +499,27 @@ const notificationItems = [
     </n-tabs>
   </n-card>
 </template>
+
+<style scoped>
+.personal-config-detail-value {
+  display: block;
+  line-height: 1.6;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.personal-config-detail-descriptions :deep(.n-descriptions-table-header) {
+  width: 136px;
+  min-width: 136px;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.personal-config-detail-descriptions :deep(.n-descriptions-table-content) {
+  vertical-align: top;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+</style>

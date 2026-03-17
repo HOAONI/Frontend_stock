@@ -3,6 +3,7 @@ import PersonalConfigDetailTabs from './components/PersonalConfigDetailTabs.vue'
 import PersonalConfigOverview from './components/PersonalConfigOverview.vue'
 import { usePersonalConfigPage } from './composables/usePersonalConfigPage'
 
+// 页面本身只负责组装总览卡和详情标签页，业务状态全部下沉到 composable。
 const {
   MASKED_TOKEN,
   activeDetailTab,

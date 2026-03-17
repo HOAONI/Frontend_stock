@@ -1,3 +1,4 @@
+/** 模拟盘绑定接口封装，负责查询账户状态和提交绑定信息。 */
 import type {
   BindSimulationAccountRequest,
   BindSimulationAccountResponse,

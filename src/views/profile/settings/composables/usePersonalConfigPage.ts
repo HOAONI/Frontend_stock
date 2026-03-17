@@ -88,6 +88,10 @@ function extractMessage(error: unknown, fallback: string): string {
   return axiosError?.response?.data?.message || fallback
 }
 
+/**
+ * 个人设置页拆成三条独立保存链路：
+ * 基础资料、AI 绑定、密码修改互不影响，便于局部失败时保留其余表单状态。
+ */
 export function usePersonalConfigPage() {
   const router = useRouter()
   const sessionStore = useSessionStore()
@@ -381,6 +385,7 @@ export function usePersonalConfigPage() {
   async function load() {
     try {
       await userSettingsStore.fetchMySettings()
+      // 每次从服务端拉回配置后都重建 baseline，后续“是否有未保存修改”才能可靠比较。
       syncAiForm()
       syncSettingsBaseline()
       syncAiBaseline()
@@ -415,6 +420,7 @@ export function usePersonalConfigPage() {
     userSettingsStore.error = ''
     aiBindingSubmitting.value = true
     try {
+      // AI 绑定单独走接口，避免基础资料保存失败时把用户输入的 Key 一起丢掉。
       const data = await updateMyUserSettings(currentAiPayload.value)
       userSettingsStore.applyAiSettings(data)
       syncAiForm()
@@ -520,6 +526,7 @@ export function usePersonalConfigPage() {
   }, { deep: true })
 
   watch(currentAiPayload, () => {
+    // AI 绑定表单一旦变更，实时重跑校验，避免用户提交后才知道 provider/model 不完整。
     if (aiBindingError.value)
       aiBindingError.value = validateAiBinding() || ''
   }, { deep: true })

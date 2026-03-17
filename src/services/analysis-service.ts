@@ -26,6 +26,7 @@ function parseRawFromReport(report: AnalysisReport | null): unknown {
   return details?.rawResult ?? null
 }
 
+// 阶段数据优先走后端预留接口；接口未开放时退回报告原始结果解析，保证页面仍可展示阶段面板。
 export async function resolveAgentStages(taskId: string | null, report: AnalysisReport | null): Promise<ServicePayload<AgentStageResult>> {
   const mode = getDataMode()
   const missingApis: string[] = []
@@ -60,6 +61,7 @@ export async function resolveAgentStages(taskId: string | null, report: Analysis
     }
   }
 
+  // 派生结果同时保留 warnings，方便 UI 明确提示“当前不是实时接口数据”。
   const parsed = parseAgentStagesFromRawResult(parseRawFromReport(report))
   return {
     data: parsed,

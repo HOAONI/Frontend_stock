@@ -1,4 +1,6 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+// 返回顶部组件负责在长页面中提供快速回顶入口。
+</script>
 
 <template>
   <n-back-top :bottom="80" :visibility-height="300">

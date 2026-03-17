@@ -16,6 +16,7 @@ function extractMessage(error: unknown, fallback: string): string {
   return axiosError?.response?.data?.message || fallback
 }
 
+// 兼容后端不同阶段返回的 ai 结构，统一为页面稳定可消费的形状。
 function normalizeAiSettings(settings: UserSettingsResponse): UserSettingsResponse['ai'] {
   return {
     personalProvider: settings.ai?.personalProvider || '',
@@ -45,6 +46,10 @@ function normalizeAiSettings(settings: UserSettingsResponse): UserSettingsRespon
   }
 }
 
+/**
+ * 个人设置 store 负责把后端配置归一化后缓存到前端，
+ * 避免页面直接处理 null、旧字段和 source/effective 的差异。
+ */
 export const useUserSettingsStore = defineStore('user-settings-store', {
   state: (): UserSettingsState => ({
     loading: false,
@@ -55,6 +60,7 @@ export const useUserSettingsStore = defineStore('user-settings-store', {
   }),
   actions: {
     applySettings(settings: UserSettingsResponse) {
+      // 统一补默认值，保证表单始终拿到可编辑的完整模型。
       this.settings = {
         simulation: {
           accountName: settings.simulation?.accountName || '',

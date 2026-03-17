@@ -1,3 +1,4 @@
+/** 分析预留接口封装，负责读取任务阶段详情和阶段流地址。 */
 import client from './client'
 import { toCamelCase } from './case'
 

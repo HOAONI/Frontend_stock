@@ -310,6 +310,10 @@ function timelineType(status: SchedulerTaskStatus): Exclude<SchedulerTagItem['ty
   return 'default'
 }
 
+/**
+ * 调度中心的核心 composable。
+ * 这里把 overview / health / tasks / detail 四类接口结果拼成页面可直接消费的视图模型。
+ */
 export function useSchedulerCenter() {
   const sessionStore = useSessionStore()
 
@@ -928,6 +932,7 @@ export function useSchedulerCenter() {
 
     loading.value = true
     try {
+      // 列表接口同时承载筛选、分页和 scope 视图切换，统一从这里收口。
       const result = await listSchedulerTasks({
         page: page.value,
         limit: limit.value,
@@ -994,6 +999,7 @@ export function useSchedulerCenter() {
     detailStageWarning.value = ''
     try {
       const payload = await getReservedTaskStages(taskId)
+      // 详情抽屉展示时直接补齐标题和缺省摘要，组件层不再关心枚举翻译。
       detailStages.value = payload.stages.map(item => ({
         ...item,
         title: stageTitle(item.code),
@@ -1023,6 +1029,7 @@ export function useSchedulerCenter() {
       const result = await getSchedulerTaskDetail(targetId)
       detailData.value = result
       selectedTaskId.value = result.task.taskId
+      // 详情与阶段接口拆开拉取，避免阶段接口失败时整份详情一起报错。
       await loadDetailStages(targetId)
     }
     catch (error: unknown) {

@@ -14,6 +14,7 @@ import type {
   SchedulerTaskTableRow,
 } from '@/types/analysis-scheduler-view'
 
+// 工作台面板负责调度任务的筛选、分页和行级操作入口。
 const props = defineProps<{
   isAdmin: boolean
   statusOptions: SelectOption[]
@@ -37,6 +38,7 @@ const emit = defineEmits<{
 
 const filters = defineModel<SchedulerFilterForm>('filters', { required: true })
 
+// 表格列在组件内集中定义，保证筛选区与行内动作始终使用同一份展示规则。
 const columns = computed<DataTableColumns<SchedulerTaskTableRow>>(() => [
   {
     title: '股票代码',
@@ -178,6 +180,7 @@ function rowProps(row: SchedulerTaskTableRow) {
 <template>
   <n-card :bordered="false" :segmented="{ content: true }" size="small">
     <n-space vertical :size="16">
+      <!-- 顶部筛选区决定下方列表的 scope、状态和分页结果。 -->
       <n-flex justify="space-between" align="start" :wrap="true" :size="12">
         <n-space vertical :size="6">
           <n-text depth="3">

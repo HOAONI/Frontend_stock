@@ -6,6 +6,7 @@ import type {
   SchedulerTagItem,
 } from '@/types/analysis-scheduler-view'
 
+// 当前焦点任务面板负责展示已选任务摘要，并暴露可执行动作入口。
 const props = defineProps<{
   hasTask: boolean
   metrics: SchedulerMetricItem[]
@@ -31,6 +32,7 @@ const emit = defineEmits<{
 <template>
   <n-card :bordered="false" :segmented="{ content: true }" size="small">
     <n-space vertical :size="16">
+      <!-- 没有选中任务时，这里也保留结构，方便用户理解后续操作会出现在何处。 -->
       <n-flex justify="space-between" align="start" :wrap="true" :size="12">
         <n-space vertical :size="6">
           <n-text depth="3">

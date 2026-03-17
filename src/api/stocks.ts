@@ -1,3 +1,4 @@
+/** 股票行情接口封装，负责报价、历史 K 线和图片识股请求。 */
 import type { ExtractFromImageResponse, QuoteResponse, StockHistoryResponse } from '@/types/stocks'
 import client from './client'
 import { toCamelCase } from './case'

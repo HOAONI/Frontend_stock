@@ -1,3 +1,4 @@
+/** 行情预留接口封装，负责读取后端指标和因子数据。 */
 import client from './client'
 import { toCamelCase } from './case'
 

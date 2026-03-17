@@ -1,3 +1,4 @@
+/** Agent 回放相关类型定义，描述运行参数、明细结果和历史记录。 */
 export interface AgentBacktestDateRange {
   startDate: string | null
   endDate: string | null

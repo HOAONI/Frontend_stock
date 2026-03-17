@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 面包屑组件负责根据当前路由展示导航层级。
 const router = useRouter()
 const route = useRoute()
 

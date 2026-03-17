@@ -1,3 +1,4 @@
+/** 个人设置接口封装，负责读取和更新当前用户配置。 */
 import type { UpdateUserSettingsRequest, UserSettingsResponse } from '@/types/user-settings'
 import client from './client'
 import { toCamelCase } from './case'

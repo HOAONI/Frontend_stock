@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// Agent 阶段面板负责展示单条分析结果的阶段状态、摘要和原始输出。
 import type { AgentStageItem } from '@/types/agent-stages'
 
 const props = defineProps<{

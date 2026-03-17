@@ -1,3 +1,4 @@
+/** 运行时图标加载工具，负责解析本地图标和 vendored 图标路径。 */
 import { vendoredRuntimeIconPathMap } from './runtime-icon.generated'
 
 const localSvgIcons = import.meta.glob<string>('@/assets/svg-icons/*.svg', {

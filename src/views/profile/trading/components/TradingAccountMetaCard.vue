@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 交易账户元信息卡片负责展示账户环境、币种和同步时间等信息。
 import { CARD_DENSITY, SPACING } from '@/constants/design-tokens'
 import type { TradingAccountMetaItem } from '../types'
 

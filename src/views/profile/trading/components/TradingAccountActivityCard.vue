@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 交易账户近期活动卡片负责展示最近委托、成交和状态摘要。
 import type { DataTableColumns } from 'naive-ui'
 import { useMediaQuery } from '@vueuse/core'
 import { CARD_DENSITY, SPACING } from '@/constants/design-tokens'

@@ -5,6 +5,7 @@ import type {
   SystemConfigItem,
 } from '@/types/system-config'
 
+// 把系统配置的原始 key/结构定义翻译成前端可展示的标题、分类和说明，避免页面散落硬编码。
 interface CategoryDisplayMeta {
   title: string
   description: string

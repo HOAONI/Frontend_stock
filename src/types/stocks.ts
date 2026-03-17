@@ -1,3 +1,4 @@
+/** 股票行情相关类型定义，描述报价、历史 K 线和图片识股结果。 */
 export interface QuoteResponse {
   stockCode: string
   stockName: string

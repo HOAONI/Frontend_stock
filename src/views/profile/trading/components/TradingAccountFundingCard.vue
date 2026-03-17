@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 交易账户入金卡片负责展示余额变更入口和入金状态。
 import { CARD_DENSITY, SPACING } from '@/constants/design-tokens'
 import type { TradingAddFundsFormModel } from '../types'
 

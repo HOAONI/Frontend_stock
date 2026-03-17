@@ -4,6 +4,7 @@ import type {
   SchedulerTaskItem,
 } from '@/types/analysis-scheduler'
 
+// 调度中心专用的前端视图模型类型，避免页面直接依赖原始接口结构。
 export type SchedulerTone = 'default' | 'primary' | 'info' | 'success' | 'warning' | 'error'
 
 export interface SchedulerOption<T = string> {

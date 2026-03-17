@@ -13,6 +13,10 @@ interface UseTaskStreamOptions {
   onError?: (error: Event) => void
 }
 
+/**
+ * 封装分析任务的 SSE 连接，并在断线后自动重连。
+ * 页面层只需要关心事件回调，不必重复处理 EventSource 细节。
+ */
 export function useTaskStream(options: UseTaskStreamOptions = {}) {
   const isConnected = ref(false)
   const reconnectTimer = ref<number | null>(null)
@@ -86,6 +90,7 @@ export function useTaskStream(options: UseTaskStreamOptions = {}) {
       isConnected.value = false
       options.onError?.(error)
       disconnect()
+      // 统一在这里安排重连，避免页面层各自重复 setTimeout。
       reconnectTimer.value = window.setTimeout(connect, 3000)
     }
   }

@@ -14,6 +14,7 @@ import {
   getSystemConfigFieldDisplay,
 } from '@/utils/system-config-display'
 
+// 系统配置页按分类聚合字段，并维护一份可编辑草稿，避免直接改写服务端原值。
 const loading = ref(false)
 const saving = ref(false)
 const errorText = ref('')
@@ -97,6 +98,7 @@ async function loadConfig() {
     data.items.forEach((item) => {
       nextDraft[item.key] = item.value
     })
+    // 草稿只在加载或保存后整体重建，便于精确计算脏字段数量和校验问题。
     draft.value = nextDraft
     issues.value = []
 
@@ -201,6 +203,7 @@ onMounted(loadConfig)
 <template>
   <n-space vertical :size="16">
     <n-card title="系统配置管理" size="small">
+      <!-- 顶部用于全局重载、保存和图片识股入口。 -->
       <n-space align="center" :wrap="true">
         <n-button :loading="loading" @click="loadConfig">
           重新加载
@@ -237,6 +240,7 @@ onMounted(loadConfig)
 
       <n-grid-item :span="24" :l-span="18">
         <n-card title="配置项" size="small">
+          <!-- 右侧主区域负责按分类展示字段，并直接承载编辑中的草稿值。 -->
           <n-spin :show="loading">
             <n-empty v-if="visibleItems.length === 0" description="当前分类暂无配置项" />
             <n-form v-else label-placement="top">

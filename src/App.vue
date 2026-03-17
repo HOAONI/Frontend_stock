@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 根组件负责用 Suspense 承接异步初始化后的应用壳层。
 import AppMain from './AppMain.vue'
 import AppLoading from './components/common/AppLoading.vue'
 

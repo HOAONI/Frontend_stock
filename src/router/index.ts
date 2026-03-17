@@ -1,3 +1,4 @@
+/** 路由安装入口，负责创建路由实例并在应用启动时挂载守卫。 */
 import type { App } from 'vue'
 import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router'
 import { setupRouterGuard } from './guard'

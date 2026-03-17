@@ -1,3 +1,4 @@
+/** 模拟盘账户 store，负责绑定流程、账户状态缓存和引导弹窗控制。 */
 import type { AxiosError } from 'axios'
 import type {
   BindSimulationAccountRequest,
@@ -50,7 +51,7 @@ export const useBrokerAccountStore = defineStore('broker-account-store', {
     },
 
     clearOnboardingDismissedAt() {
-      // no-op: onboarding follows backend account status only
+      // 这里故意不做额外处理：引导弹窗完全以后端账户状态为准。
     },
 
     shouldShowSimulationOnboarding(): boolean {

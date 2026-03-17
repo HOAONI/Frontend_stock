@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 调度中心告警动作面板负责呈现异常提示和可执行恢复操作。
 import type { SchedulerAlertItem } from '@/types/analysis-scheduler-view'
 
 defineProps<{

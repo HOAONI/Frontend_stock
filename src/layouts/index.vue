@@ -12,6 +12,7 @@ import {
 } from './components'
 import Content from './Content.vue'
 
+// 主布局负责壳层导航，同时全局托管“模拟盘初始化引导”弹窗。
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
@@ -104,6 +105,7 @@ async function handleBindModalBound() {
 watch(
   () => [route.fullPath, sessionStore.loggedIn, sessionStore.currentUser?.username],
   () => {
+    // 路由切换和登录态变化后都重新评估一次 onboarding，保证关键页面不会漏弹引导。
     void refreshSimulationOnboarding(false)
   },
   { immediate: true },

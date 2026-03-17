@@ -29,6 +29,7 @@ export interface StrategyRunHistoryInput {
   limit?: number
 }
 
+// 后端历史列表字段兼容多版返回，这里统一做一次兜底，页面无需再重复判空。
 function ensureListResponse(data: StrategyRunHistoryResponse): StrategyRunHistoryResponse {
   return {
     total: Number(data.total || 0),

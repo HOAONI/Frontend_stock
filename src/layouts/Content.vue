@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 主内容区容器负责承接路由页面，并统一内容滚动区域。
 import { SPACING } from '@/constants/design-tokens'
 import { useAppStore } from '@/store'
 

@@ -1,3 +1,4 @@
+/** 股票相关通用工具，负责股票代码校验、时间格式化和展示兜底。 */
 export function validateStockCode(value: string): { valid: boolean, message?: string, normalized: string } {
   const normalized = value.trim().toUpperCase()
   if (!normalized) {

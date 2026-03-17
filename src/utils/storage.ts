@@ -4,11 +4,13 @@ interface StorageData<T> {
   value: T
   expire: number | null
 }
+
 /**
- * LocalStorage部分操作
+ * LocalStorage 存取封装。
+ * 这里额外维护过期时间，适合缓存会在一段时间后失效的数据。
  */
 function createLocalStorage<T extends Storage.Local>() {
-  // 默认缓存期限为7天
+  // 默认缓存期限为 7 天。
 
   function set<K extends keyof T>(key: K, value: T[K], expire: number = 60 * 60 * 24 * 7) {
     const storageData: StorageData<T[K]> = {
@@ -48,10 +50,11 @@ function createLocalStorage<T extends Storage.Local>() {
     clear,
   }
 }
-/**
- * sessionStorage部分操作
- */
 
+/**
+ * sessionStorage 存取封装。
+ * sessionStorage 天然跟随浏览器会话，不再额外处理过期时间。
+ */
 function createSessionStorage<T extends Storage.Session>() {
   function set<K extends keyof T>(key: K, value: T[K]) {
     const json = JSON.stringify(value)

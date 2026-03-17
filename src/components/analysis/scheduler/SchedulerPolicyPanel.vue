@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 调度中心策略面板负责解释当前调度规则、优先级和运行模式。
 import type { SchedulerPolicyItem } from '@/types/analysis-scheduler-view'
 
 const props = defineProps<{

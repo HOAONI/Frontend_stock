@@ -15,6 +15,7 @@ import type {
   TradingUiType,
 } from '../types'
 
+// 交易明细来自多个上游接口，字段命名并不完全一致，这里统一做别名映射。
 const COMMON_FIELD_LABELS: Record<string, string> = {
   stockCode: '代码',
   stock_code: '代码',
@@ -327,6 +328,7 @@ function buildPrioritizedColumns(
   const remainingKeys = discoveredKeys.filter(key => !prioritizedKeys.includes(key))
   const orderedKeys = [...prioritizedKeys, ...remainingKeys].slice(0, maxColumns)
 
+  // 表格列顺序优先保证“可读字段”靠前，尾部的原始兼容字段只在有空间时展示。
   return orderedKeys.map((key) => {
     const fieldLabel = prettifyFieldLabel(key)
     return {
@@ -359,6 +361,10 @@ function buildPrioritizedColumns(
   })
 }
 
+/**
+ * 把原始交易账户快照整理为页面卡片、标签和表格模型。
+ * 页面层只负责布局，字段兼容与展示优先级都集中在这里处理。
+ */
 export function useTradingAccountCenterViewModel() {
   const brokerAccountStore = useBrokerAccountStore()
   const tradingAccountStore = useTradingAccountStore()
@@ -371,6 +377,7 @@ export function useTradingAccountCenterViewModel() {
 
   const homeSnapshot = computed(() => tradingAccountStore.homeSnapshot)
   const homeKpis = computed(() => tradingAccountStore.homeKpis)
+  // 部分后端只返回 totalAsset/cash，不直接返回 marketValue，这里前端补齐占比计算基准。
   const marketValueForRatio = computed(() => {
     if (homeKpis.value.marketValue != null)
       return Math.max(homeKpis.value.marketValue, 0)

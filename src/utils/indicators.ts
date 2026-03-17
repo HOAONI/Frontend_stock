@@ -1,3 +1,4 @@
+/** 技术指标计算工具，负责从历史行情中派生均线、RSI、量比等指标。 */
 import type { FactorSnapshot, MaSeriesPoint } from '@/types/market-analytics'
 import type { StockHistoryPoint } from '@/types/stocks'
 
@@ -18,6 +19,7 @@ function safeNumber(value: unknown): number | null {
   return num
 }
 
+/** 计算均线序列；当样本不足时返回 `null`，让图表明确表现为空档。 */
 export function computeMA(bars: StockHistoryPoint[], window: number): MaSeriesPoint[] {
   return bars.map((bar, index) => {
     if (index + 1 < window) {
@@ -36,6 +38,7 @@ export function computeMA(bars: StockHistoryPoint[], window: number): MaSeriesPo
   })
 }
 
+/** 按 14 周期 RSI 的常规公式计算强弱指标。 */
 export function computeRSI14(bars: StockHistoryPoint[]): number | null {
   if (bars.length < 15)
     return null
@@ -73,6 +76,7 @@ export function computeRSI14(bars: StockHistoryPoint[]): number | null {
   return round(100 - 100 / (1 + rs))
 }
 
+/** 计算最近 20 个交易周期的动量百分比。 */
 export function computeMomentum20(bars: StockHistoryPoint[]): number | null {
   if (bars.length < 21)
     return null
@@ -83,6 +87,7 @@ export function computeMomentum20(bars: StockHistoryPoint[]): number | null {
   return round(((current / base) - 1) * 100)
 }
 
+/** 计算最近一根 K 线相对于近 5 根平均成交量的量比。 */
 export function computeVolRatio5(bars: StockHistoryPoint[]): number | null {
   if (bars.length < 5)
     return null
@@ -100,6 +105,7 @@ export function computeVolRatio5(bars: StockHistoryPoint[]): number | null {
   return round(currentVol / avgVol)
 }
 
+/** 计算最新一根 K 线的振幅百分比。 */
 export function computeAmplitude(bars: StockHistoryPoint[]): number | null {
   if (bars.length === 0)
     return null
@@ -112,6 +118,7 @@ export function computeAmplitude(bars: StockHistoryPoint[]): number | null {
   return round(((high - low) / open) * 100)
 }
 
+/** 汇总页面常用的行情派生因子，供行情中心统一消费。 */
 export function computeFactors(bars: StockHistoryPoint[]): FactorSnapshot {
   const ma5 = computeMA(bars, 5)
   const ma10 = computeMA(bars, 10)

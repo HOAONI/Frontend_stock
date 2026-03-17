@@ -1,3 +1,4 @@
+/** 全局状态安装入口，负责创建 Pinia 并注册持久化插件。 */
 import type { App } from 'vue'
 import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 
