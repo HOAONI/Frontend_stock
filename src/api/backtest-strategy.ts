@@ -12,6 +12,8 @@ import type {
   UserBacktestStrategyListResponse,
 } from '@/types/backtest-strategy'
 
+const backtestRunTimeout = Number(import.meta.env.VITE_BACKTEST_RUN_TIMEOUT || '150000')
+
 export async function runStrategyBacktest(payload: StrategyRangeRunRequest): Promise<StrategyRangeRunResponse> {
   const body: Record<string, unknown> = {
     code: payload.code,
@@ -29,7 +31,7 @@ export async function runStrategyBacktest(payload: StrategyRangeRunRequest): Pro
   if (payload.slippageBps != null)
     body.slippage_bps = payload.slippageBps
 
-  const { data } = await client.post('/api/v1/backtest/strategy/run', body)
+  const { data } = await client.post('/api/v1/backtest/strategy/run', body, { timeout: backtestRunTimeout })
   return toCamelCase<StrategyRangeRunResponse>(data)
 }
 

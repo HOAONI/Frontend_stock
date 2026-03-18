@@ -37,6 +37,8 @@
     "UnoCSS"
   ],
   "scripts": {
+    "start": "bash scripts/system/start.sh",
+    "stop": "bash scripts/system/stop.sh",
     "dev": "vite --mode dev --port 5173",
     "dev:prod": "vite --mode production",
     "build": "vite build",

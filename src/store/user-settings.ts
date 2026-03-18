@@ -18,13 +18,20 @@ function extractMessage(error: unknown, fallback: string): string {
 
 // 兼容后端不同阶段返回的 ai 结构，统一为页面稳定可消费的形状。
 function normalizeAiSettings(settings: UserSettingsResponse): UserSettingsResponse['ai'] {
+  const hasToken = Boolean(settings.ai?.hasToken)
+  const apiToken = settings.ai?.apiToken || ''
+  const apiTokenReadable = settings.ai?.apiTokenReadable ?? (!hasToken || Boolean(apiToken))
+
   return {
     personalProvider: settings.ai?.personalProvider || '',
     personalModel: settings.ai?.personalModel || '',
     provider: settings.ai?.effective?.provider || settings.ai?.systemDefault?.provider || settings.ai?.provider || '',
     baseUrl: settings.ai?.effective?.baseUrl || settings.ai?.systemDefault?.baseUrl || settings.ai?.baseUrl || '',
     model: settings.ai?.effective?.model || settings.ai?.systemDefault?.model || settings.ai?.model || '',
-    hasToken: Boolean(settings.ai?.hasToken),
+    hasToken,
+    apiToken,
+    apiTokenReadable,
+    apiTokenReadIssue: settings.ai?.apiTokenReadIssue || '',
     apiTokenMasked: settings.ai?.apiTokenMasked || '',
     source: settings.ai?.source || (settings.ai?.hasToken ? 'personal' : 'system'),
     hasSystemToken: Boolean(settings.ai?.hasSystemToken),

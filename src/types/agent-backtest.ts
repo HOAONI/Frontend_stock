@@ -1,4 +1,6 @@
 /** Agent 回放相关类型定义，描述运行参数、明细结果和历史记录。 */
+import type { BacktestAiInterpretation } from './backtest-ai'
+
 export interface AgentBacktestDateRange {
   startDate: string | null
   endDate: string | null
@@ -59,6 +61,10 @@ export interface AgentBacktestLlmMeta {
   model: string
 }
 
+export interface AgentBacktestSummary extends Record<string, unknown> {
+  aiInterpretation?: BacktestAiInterpretation
+}
+
 export interface AgentBacktestDetailResponse {
   runGroupId: number
   code: string
@@ -73,7 +79,7 @@ export interface AgentBacktestDetailResponse {
   completedAt: string | null
   activeResultVersion: number
   llmMeta?: AgentBacktestLlmMeta | null
-  summary: Record<string, unknown>
+  summary: AgentBacktestSummary
   diagnostics: Record<string, unknown>
   decisionSourceBreakdown: Record<string, number>
   dailySteps: AgentBacktestDailyStep[]
@@ -92,7 +98,7 @@ export interface AgentBacktestHistoryItem {
   createdAt: string | null
   completedAt: string | null
   llmMeta?: AgentBacktestLlmMeta | null
-  summary: Record<string, unknown>
+  summary: AgentBacktestSummary
 }
 
 export interface AgentBacktestHistoryResponse {

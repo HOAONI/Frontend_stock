@@ -11,10 +11,10 @@ import { updateMyUserSettings } from '@/api/user-settings'
 import { useSessionStore, useUserSettingsStore } from '@/store'
 import { formatDateTime } from '@/utils/stock'
 
-const MASKED_TOKEN = '******'
 const PASSWORD_MIN_LENGTH = 8
 const PASSWORD_MAX_LENGTH = 64
 const DEFAULT_SILICONFLOW_MODEL = 'Pro/deepseek-ai/DeepSeek-V3'
+const DEFAULT_PERSONAL_TOKEN_READ_ISSUE = '当前保存的个人 API Key 无法回显，请重新输入并保存；如问题持续，请检查 PERSONAL_SECRET_KEY 配置。'
 
 const providerLabelMap: Record<string, string> = {
   gemini: 'Gemini',
@@ -104,6 +104,7 @@ export function usePersonalConfigPage() {
   const personalModelInput = shallowRef('')
   const personalProviderInput = shallowRef<PersonalAiProvider | null>(null)
   const originalPersonalProvider = shallowRef<PersonalAiProvider | ''>('')
+  const originalPersonalApiToken = shallowRef('')
   const activeDetailTab = shallowRef<PersonalConfigDetailTab>('basic')
   const aiBaselinePayload = shallowRef<UpdateUserSettingsRequest | null>(null)
   const settingsBaselinePayload = shallowRef<UpdateUserSettingsRequest | null>(null)
@@ -144,16 +145,6 @@ export function usePersonalConfigPage() {
       positionMaxPct: userSettingsStore.settings.strategy.positionMaxPct,
       stopLossPct: userSettingsStore.settings.strategy.stopLossPct,
       takeProfitPct: userSettingsStore.settings.strategy.takeProfitPct,
-    },
-  }))
-
-  const currentAiPayload = computed<UpdateUserSettingsRequest>(() => ({
-    ai: {
-      provider: personalProviderInput.value || undefined,
-      model: personalProviderInput.value === 'siliconflow'
-        ? personalModelInput.value.trim()
-        : undefined,
-      apiToken: apiTokenInput.value,
     },
   }))
 
@@ -207,6 +198,15 @@ export function usePersonalConfigPage() {
 
   const hasSystemAi = computed(() => userSettingsStore.settings.ai.systemDefault.source !== 'none')
   const hasPersonalAiToken = computed(() => userSettingsStore.settings.ai.hasToken)
+  const personalTokenReadable = computed(() =>
+    !hasPersonalAiToken.value || userSettingsStore.settings.ai.apiTokenReadable,
+  )
+  const personalTokenReadIssue = computed(() =>
+    userSettingsStore.settings.ai.apiTokenReadIssue || DEFAULT_PERSONAL_TOKEN_READ_ISSUE,
+  )
+  const mustResubmitApiToken = computed(() =>
+    userSettingsStore.settings.ai.requiresProviderReselection || !personalTokenReadable.value,
+  )
   const personalBindingAvailable = computed(() => userSettingsStore.settings.ai.personalBindingAvailable)
   const personalBindingIssue = computed(() =>
     userSettingsStore.settings.ai.personalBindingIssue || '后端尚未完成个人 AI Key 加密配置，请联系管理员检查 PERSONAL_SECRET_KEY。',
@@ -254,6 +254,8 @@ export function usePersonalConfigPage() {
   const canUnbindAiBinding = computed(() => hasPersonalAiToken.value)
 
   const aiBindingDisabled = computed(() => {
+    const apiToken = normalizeApiTokenInput()
+
     if (aiBindingSubmitting.value)
       return true
     if (!personalBindingAvailable.value)
@@ -262,18 +264,13 @@ export function usePersonalConfigPage() {
       return true
     if (personalProviderInput.value === 'siliconflow' && !personalModelInput.value.trim())
       return true
-    if (
-      apiTokenInput.value === MASKED_TOKEN
-      && originalPersonalProvider.value
-      && personalProviderInput.value !== originalPersonalProvider.value
-    ) {
+    if (mustResubmitApiToken.value && !apiToken)
       return true
-    }
     if (hasPersonalAiToken.value && !hasPendingAiBindingChanges.value)
       return true
-    if (!hasPersonalAiToken.value && !apiTokenInput.value.trim())
+    if (!hasPersonalAiToken.value && !apiToken)
       return true
-    if (hasPersonalAiToken.value && !apiTokenInput.value.trim())
+    if (hasPersonalAiToken.value && !apiToken)
       return true
     return false
   })
@@ -292,16 +289,47 @@ export function usePersonalConfigPage() {
     return toPersonalProvider(userSettingsStore.settings.ai.systemDefault.provider) || 'deepseek'
   }
 
+  function normalizeApiTokenInput(): string {
+    return apiTokenInput.value.trim()
+  }
+
+  function buildCurrentAiPayload(): UpdateUserSettingsRequest {
+    const provider = personalProviderInput.value || undefined
+    const model = personalProviderInput.value === 'siliconflow'
+      ? personalModelInput.value.trim()
+      : undefined
+    const apiToken = normalizeApiTokenInput()
+    const providerChanged = Boolean(
+      provider
+      && originalPersonalProvider.value
+      && provider !== originalPersonalProvider.value,
+    )
+    const tokenChanged = apiToken !== originalPersonalApiToken.value
+    const shouldIncludeApiToken = mustResubmitApiToken.value
+      || providerChanged
+      || tokenChanged
+      || (hasPersonalAiToken.value && apiToken === '')
+
+    return {
+      ai: {
+        provider,
+        model,
+        ...(shouldIncludeApiToken ? { apiToken } : {}),
+      },
+    }
+  }
+
+  const currentAiPayload = computed<UpdateUserSettingsRequest>(() => buildCurrentAiPayload())
+
   function syncAiForm() {
     const ai = userSettingsStore.settings.ai
     originalPersonalProvider.value = ai.personalProvider
+    originalPersonalApiToken.value = ai.apiToken || ''
     personalProviderInput.value = ai.personalProvider || pickDefaultPersonalProvider()
     personalModelInput.value = ai.personalProvider === 'siliconflow'
       ? (ai.personalModel || DEFAULT_SILICONFLOW_MODEL)
       : ''
-    apiTokenInput.value = ai.hasToken
-      ? (ai.apiTokenMasked || MASKED_TOKEN)
-      : ''
+    apiTokenInput.value = ai.apiToken || ''
     aiBindingError.value = ''
   }
 
@@ -331,28 +359,21 @@ export function usePersonalConfigPage() {
   }
 
   function validateAiBinding(): string | null {
+    const apiToken = normalizeApiTokenInput()
+
     if (!personalBindingAvailable.value)
       return personalBindingIssue.value
     if (!personalProviderInput.value)
       return '请选择个人 AI 提供商。'
     if (personalProviderInput.value === 'siliconflow' && !personalModelInput.value.trim())
       return '请选择或填写 SiliconFlow 模型名称。'
-    if (
-      userSettingsStore.settings.ai.requiresProviderReselection
-      && apiTokenInput.value === MASKED_TOKEN
-    ) {
-      return '检测到旧版 AI 提供商配置，请重新选择 DeepSeek、OpenAI 或 SiliconFlow 并重新输入 API Key。'
-    }
-    if (
-      apiTokenInput.value === MASKED_TOKEN
-      && originalPersonalProvider.value
-      && personalProviderInput.value !== originalPersonalProvider.value
-    ) {
-      return '切换提供商时请重新输入对应 API Key。'
-    }
-    if (!hasPersonalAiToken.value && !apiTokenInput.value.trim())
+    if (!personalTokenReadable.value && !apiToken)
+      return personalTokenReadIssue.value
+    if (userSettingsStore.settings.ai.requiresProviderReselection && !apiToken)
+      return '检测到旧版 AI 提供商配置，请重新选择 DeepSeek、OpenAI 或 SiliconFlow，并确认对应的 API Key 后重新保存。'
+    if (!hasPersonalAiToken.value && !apiToken)
       return '请输入个人 API Key。'
-    if (hasPersonalAiToken.value && !apiTokenInput.value.trim())
+    if (hasPersonalAiToken.value && !apiToken)
       return '如需解除绑定，请使用“解除绑定”按钮。'
     return null
   }
@@ -550,7 +571,6 @@ export function usePersonalConfigPage() {
   })
 
   return {
-    MASKED_TOKEN,
     activeDetailTab,
     aiBindingActionLabel,
     aiBindingDisabled,
@@ -572,6 +592,8 @@ export function usePersonalConfigPage() {
     load,
     personalBindingAvailable,
     personalBindingIssue,
+    personalTokenReadable,
+    personalTokenReadIssue,
     personalModelInput,
     personalProviderInput,
     passwordChangeable,

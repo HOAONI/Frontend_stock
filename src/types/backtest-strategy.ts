@@ -1,4 +1,6 @@
 // 策略回测中心使用的模板、用户策略和运行结果数据结构。
+import type { BacktestAiInterpretation } from './backtest-ai'
+
 export type BacktestStrategyTemplateCode = 'ma_cross' | 'rsi_threshold'
 
 export interface BacktestStrategyTemplateParamSchema {
@@ -71,6 +73,10 @@ export interface StrategyTradeItem {
   exitReason: string | null
 }
 
+export interface StrategyRunMetrics extends Record<string, unknown> {
+  aiInterpretation?: BacktestAiInterpretation
+}
+
 export interface StrategyRunItem {
   runId: number
   strategyId: number | null
@@ -80,7 +86,7 @@ export interface StrategyRunItem {
   templateName: string
   strategyVersion: string
   params: Record<string, unknown>
-  metrics: Record<string, unknown>
+  metrics: StrategyRunMetrics
   benchmark: Record<string, unknown>
   trades: StrategyTradeItem[]
   equity: StrategyEquityPoint[]
@@ -91,10 +97,15 @@ export interface StrategyDateRange {
   endDate: string | null
 }
 
+export type StrategyAiInterpretationJobStatus = 'pending' | 'processing' | 'completed' | 'failed'
+
 export interface StrategyRangeRunResponse {
   runGroupId: number
   code: string
   engineVersion: string
+  aiInterpretationStatus: StrategyAiInterpretationJobStatus | string
+  aiInterpretationErrorMessage?: string | null
+  aiInterpretationCompletedAt?: string | null
   requestedRange: StrategyDateRange
   effectiveRange: StrategyDateRange
   createdAt: string
@@ -106,6 +117,9 @@ export interface StrategyRunHistoryItem {
   runGroupId: number
   code: string
   engineVersion: string
+  aiInterpretationStatus: StrategyAiInterpretationJobStatus | string
+  aiInterpretationErrorMessage?: string | null
+  aiInterpretationCompletedAt?: string | null
   requestedRange: StrategyDateRange
   effectiveRange: StrategyDateRange
   createdAt: string
@@ -117,7 +131,7 @@ export interface StrategyRunHistoryItem {
     templateCode: string
     templateName: string
     strategyVersion: string
-    metrics: Record<string, unknown>
+    metrics: StrategyRunMetrics
   }>
 }
 

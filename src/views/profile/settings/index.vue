@@ -5,7 +5,6 @@ import { usePersonalConfigPage } from './composables/usePersonalConfigPage'
 
 // 页面本身只负责组装总览卡和详情标签页，业务状态全部下沉到 composable。
 const {
-  MASKED_TOKEN,
   activeDetailTab,
   aiBindingActionLabel,
   aiBindingDisabled,
@@ -30,6 +29,8 @@ const {
   passwordSubmitting,
   personalBindingAvailable,
   personalBindingIssue,
+  personalTokenReadable,
+  personalTokenReadIssue,
   personalModelInput,
   personalProviderInput,
   providerOptions,
@@ -110,11 +111,12 @@ const {
           :can-unbind-ai-binding="canUnbindAiBinding"
           :personal-binding-available="personalBindingAvailable"
           :personal-binding-issue="personalBindingIssue"
+          :personal-token-readable="personalTokenReadable"
+          :personal-token-read-issue="personalTokenReadIssue"
           :password-changeable="passwordChangeable"
           :password-error="passwordError"
           :password-submitting="passwordSubmitting"
           :requires-provider-reselection="userSettingsStore.settings.ai.requiresProviderReselection"
-          :masked-token="MASKED_TOKEN"
           @open-trading="goTradingCenter"
           @save-ai-binding="saveAiBinding"
           @submit-password-change="submitPasswordChange"

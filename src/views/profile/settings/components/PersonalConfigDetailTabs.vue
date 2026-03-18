@@ -35,11 +35,12 @@ defineProps<{
   canUnbindAiBinding: boolean
   personalBindingAvailable: boolean
   personalBindingIssue: string
+  personalTokenReadable: boolean
+  personalTokenReadIssue: string
   passwordChangeable: boolean
   passwordError: string
   passwordSubmitting: boolean
   requiresProviderReselection: boolean
-  maskedToken: string
 }>()
 
 const emit = defineEmits<{
@@ -221,7 +222,7 @@ const notificationItems = [
             <template #header>
               登录与运行安全概览
             </template>
-            {{ requiresProviderReselection ? '检测到旧版 AI 提供商配置，请在“账号绑定”中重新选择 DeepSeek、OpenAI 或 SiliconFlow，并输入新的 API Key。' : '当前登录状态正常，安全风险主要围绕 AI 凭据与系统回退状态。' }}
+            {{ requiresProviderReselection ? '检测到旧版 AI 提供商配置，请在“账号绑定”中重新选择 DeepSeek、OpenAI 或 SiliconFlow，并确认当前 API Key 后重新保存。' : '当前登录状态正常，安全风险主要围绕 AI 凭据与系统回退状态。' }}
           </n-alert>
 
           <n-card embedded title="登录与安全状态">
@@ -240,8 +241,8 @@ const notificationItems = [
                 {{ roleText }}
               </n-descriptions-item>
               <n-descriptions-item label="个人 Key">
-                <n-tag :type="hasPersonalAiToken ? 'success' : 'default'" size="small">
-                  {{ hasPersonalAiToken ? '已保存' : '未保存' }}
+                <n-tag :type="!hasPersonalAiToken ? 'default' : (personalTokenReadable ? 'success' : 'warning')" size="small">
+                  {{ !hasPersonalAiToken ? '未保存' : (personalTokenReadable ? '已保存' : '已保存但需重新输入') }}
                 </n-tag>
               </n-descriptions-item>
               <n-descriptions-item label="系统回退">
@@ -371,7 +372,7 @@ const notificationItems = [
           </n-alert>
 
           <n-alert v-if="requiresProviderReselection" type="warning">
-            检测到旧版 AI 提供商配置，请重新选择 DeepSeek、OpenAI 或 SiliconFlow，并重新输入对应的 API Key。
+            检测到旧版 AI 提供商配置，请重新选择 DeepSeek、OpenAI 或 SiliconFlow，并确认当前 API Key 后重新保存。
           </n-alert>
 
           <n-card embedded title="系统内置 AI">
@@ -404,6 +405,10 @@ const notificationItems = [
                 当前后端尚未完成个人 AI Key 加密配置，SiliconFlow、OpenAI 和 DeepSeek 的个人绑定都会失败。{{ personalBindingIssue }}
               </n-alert>
 
+              <n-alert v-if="hasPersonalAiToken && !personalTokenReadable" type="warning">
+                {{ personalTokenReadIssue }}
+              </n-alert>
+
               <n-alert type="info">
                 “{{ aiBindingActionLabel }}”只会保存当前 AI 提供商、模型和 API Key。页面顶部“保存更改”继续负责基础资料与策略参数。
               </n-alert>
@@ -430,10 +435,10 @@ const notificationItems = [
                         v-model:value="apiToken"
                         type="password"
                         show-password-on="click"
-                        placeholder="输入你的个人 API Key；留空则回退系统内置 AI"
+                        placeholder="输入或确认你的个人 API Key"
                       />
                       <n-text depth="3">
-                        保持 {{ maskedToken }} 表示不修改当前 Key；如需删除个人 Key，请使用下方“解除绑定”。
+                        当前输入框会回填你已保存的真实 API Key，默认以密码态隐藏；如需删除个人 Key，请使用下方“解除绑定”。
                       </n-text>
                     </n-space>
                   </n-form-item-gi>

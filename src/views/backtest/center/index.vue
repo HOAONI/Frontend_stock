@@ -3,6 +3,7 @@ import { NButton, NTag } from 'naive-ui'
 import type { LineSeriesOption } from 'echarts/charts'
 import { h, onActivated, onDeactivated } from 'vue'
 
+import BacktestAiInterpretationPanel from '@/components/backtest/BacktestAiInterpretationPanel.vue'
 import { CARD_DENSITY, CHART_HEIGHT, DASHBOARD_LAYOUT, GRID_GAP, SPACING } from '@/constants/design-tokens'
 import { useEcharts } from '@/hooks/useEcharts'
 import type { ECOption } from '@/hooks/useEcharts'
@@ -21,6 +22,7 @@ import {
   runStrategyRangeBacktest,
   updateMyBacktestStrategy,
 } from '@/services/backtest-strategy-service'
+import type { BacktestAiInterpretation } from '@/types/backtest-ai'
 import type {
   AgentBacktestDailyStep,
   AgentBacktestDetailResponse,
@@ -43,6 +45,12 @@ type BacktestMode = 'strategy' | 'agent'
 type StrategyPendingRequest = App.BacktestCenterStrategyPendingRequest
 type AgentPendingRequest = App.BacktestCenterAgentPendingRequest
 
+interface InterpretationPanelItem {
+  key: string
+  title: string
+  interpretation: BacktestAiInterpretation | null
+}
+
 defineOptions({
   name: 'backtestCenter',
 })
@@ -54,6 +62,12 @@ const STRATEGY_PARAM_LABELS: Record<string, string> = {
   rsiPeriod: 'RSI 周期',
   oversoldThreshold: '超卖阈值',
   overboughtThreshold: '超买阈值',
+}
+const STRATEGY_AI_STATUS_LABELS: Record<string, string> = {
+  pending: '生成中',
+  processing: '生成中',
+  completed: '已完成',
+  failed: '失败',
 }
 const AGENT_STATUS_LABELS: Record<string, string> = {
   refining: '精修中',
@@ -144,6 +158,7 @@ const agentPendingRequest = ref<AgentPendingRequest | null>(null)
 
 const equityOptions = ref<ECOption>({})
 const hydratingSnapshot = ref(false)
+let strategyPollTimer: ReturnType<typeof setInterval> | null = null
 let agentPollTimer: ReturnType<typeof setInterval> | null = null
 
 const strategyOptions = computed(() => {
@@ -168,6 +183,63 @@ function normalizeCodeText(value: unknown): string {
 
 function normalizeLookupKey(value: unknown): string {
   return String(value ?? '').trim().toLowerCase()
+}
+
+function asRecordObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return null
+  return value as Record<string, unknown>
+}
+
+function extractAiInterpretation(value: unknown): BacktestAiInterpretation | null {
+  const container = asRecordObject(value)
+  if (!container)
+    return null
+
+  const raw = asRecordObject(container.aiInterpretation ?? container.ai_interpretation)
+  if (!raw)
+    return null
+
+  const summary = String(raw.summary ?? '').trim()
+  const status = String(raw.status ?? '').trim()
+  if (!summary && !status)
+    return null
+
+  return {
+    version: String(raw.version ?? 'v1'),
+    status: status || 'failed',
+    verdict: raw.verdict == null ? null : String(raw.verdict).trim() || null,
+    summary: summary || 'AI 解读暂不可用',
+    generatedAt: raw.generatedAt == null
+      ? (raw.generated_at == null ? null : String(raw.generated_at))
+      : String(raw.generatedAt),
+    source: String(raw.source ?? ''),
+    provider: String(raw.provider ?? ''),
+    model: String(raw.model ?? ''),
+    errorMessage: raw.errorMessage == null
+      ? (raw.error_message == null ? null : String(raw.error_message))
+      : String(raw.errorMessage),
+  }
+}
+
+function normalizeStrategyAiStatus(value: unknown): 'pending' | 'processing' | 'completed' | 'failed' {
+  const key = normalizeLookupKey(value)
+  if (key === 'processing' || key === 'completed' || key === 'failed')
+    return key
+  return 'pending'
+}
+
+function strategyAiStatusText(value: unknown): string {
+  return STRATEGY_AI_STATUS_LABELS[normalizeStrategyAiStatus(value)] || '生成中'
+}
+
+function strategyAiStatusTagType(value: unknown): 'success' | 'warning' | 'error' | 'default' {
+  const key = normalizeStrategyAiStatus(value)
+  if (key === 'completed')
+    return 'success'
+  if (key === 'failed')
+    return 'error'
+  return 'warning'
 }
 
 function toDayText(value: number): string {
@@ -659,6 +731,7 @@ function buildAgentPendingRequest(): AgentPendingRequest {
 }
 
 function clearCurrentDisplay() {
+  stopStrategyPolling()
   stopAgentPolling()
   runError.value = ''
   recoveryNotice.value = ''
@@ -865,17 +938,83 @@ const strategyNoTradeSummary = computed(() => {
   }).filter(item => item.length > 0).join('；')
 })
 
+const strategyInterpretationItems = computed<InterpretationPanelItem[]>(() => {
+  const run = currentStrategyRun.value
+  if (!run)
+    return []
+
+  return run.items.map(item => ({
+    key: String(item.runId),
+    title: item.strategyName,
+    interpretation: extractAiInterpretation(item.metrics),
+  }))
+})
+const strategyInterpretationPending = computed(() => {
+  return mode.value === 'strategy'
+    && currentStrategyRun.value != null
+    && ['pending', 'processing'].includes(normalizeStrategyAiStatus(currentStrategyRun.value.aiInterpretationStatus))
+})
+const strategyInterpretationFailed = computed(() => {
+  return mode.value === 'strategy'
+    && currentStrategyRun.value != null
+    && normalizeStrategyAiStatus(currentStrategyRun.value.aiInterpretationStatus) === 'failed'
+})
+
 const agentSummary = computed(() => currentAgentRun.value?.summary || {})
 const agentDiagnostics = computed(() => currentAgentRun.value?.diagnostics || {})
 const agentTradeRows = computed<AgentBacktestTradeItem[]>(() => currentAgentRun.value?.trades || [])
 const agentTimelineRows = computed<AgentBacktestDailyStep[]>(() => currentAgentRun.value?.dailySteps || [])
 const currentAgentLlmMeta = computed<AgentBacktestLlmMeta | null>(() => currentAgentRun.value?.llmMeta || null)
+const agentInterpretationItems = computed<InterpretationPanelItem[]>(() => {
+  if (!currentAgentRun.value)
+    return []
+
+  return [
+    {
+      key: String(currentAgentRun.value.runGroupId),
+      title: `${currentAgentRun.value.code} Agent 回放`,
+      interpretation: extractAiInterpretation(currentAgentRun.value.summary),
+    },
+  ]
+})
+const agentInterpretationPending = computed(() => {
+  return mode.value === 'agent'
+    && currentAgentRun.value?.status === 'refining'
+    && currentAgentRun.value?.phase !== 'done'
+})
+
+function stopStrategyPolling() {
+  if (strategyPollTimer) {
+    clearInterval(strategyPollTimer)
+    strategyPollTimer = null
+  }
+}
 
 function stopAgentPolling() {
   if (agentPollTimer) {
     clearInterval(agentPollTimer)
     agentPollTimer = null
   }
+}
+
+function ensureStrategyPolling(runGroupId: number) {
+  stopStrategyPolling()
+  strategyPollTimer = setInterval(async () => {
+    try {
+      const detail = await fetchStrategyRunDetail(runGroupId)
+      currentStrategyRun.value = detail
+      rebuildEquityChart()
+      const status = normalizeStrategyAiStatus(detail.aiInterpretationStatus)
+      if (status === 'completed' || status === 'failed') {
+        stopStrategyPolling()
+        if (mode.value === 'strategy')
+          await loadStrategyHistory(strategyHistoryPage.value)
+      }
+    }
+    catch {
+      stopStrategyPolling()
+    }
+  }, 5000)
 }
 
 function ensureAgentPolling(runGroupId: number) {
@@ -969,9 +1108,14 @@ async function loadStrategyDetail(runGroupId: number, options: { silent?: boolea
     recoveryNotice.value = ''
     if (mode.value === 'strategy')
       rebuildEquityChart()
+    if (['pending', 'processing'].includes(normalizeStrategyAiStatus(detail.aiInterpretationStatus)))
+      ensureStrategyPolling(runGroupId)
+    else
+      stopStrategyPolling()
     persistBacktestSnapshot()
   }
   catch (error: unknown) {
+    stopStrategyPolling()
     if (!options.silent)
       runError.value = (error as { response?: { data?: { message?: string } } })?.response?.data?.message || '加载回测详情失败'
   }
@@ -1097,6 +1241,10 @@ async function restoreActiveRunForMode(targetMode: BacktestMode): Promise<boolea
     if (currentStrategyRun.value?.runGroupId === runGroupId) {
       if (mode.value === 'strategy')
         rebuildEquityChart()
+      if (['pending', 'processing'].includes(normalizeStrategyAiStatus(currentStrategyRun.value.aiInterpretationStatus)))
+        ensureStrategyPolling(runGroupId)
+      else
+        stopStrategyPolling()
       return true
     }
     await loadStrategyDetail(runGroupId, { silent: true, keepPending: true })
@@ -1169,8 +1317,16 @@ async function runStrategyAction() {
   rebuildEquityChart()
   await loadStrategyHistory(1)
 
+  const aiStatus = normalizeStrategyAiStatus(response.data.aiInterpretationStatus)
+  if (aiStatus === 'pending' || aiStatus === 'processing')
+    ensureStrategyPolling(response.data.runGroupId)
+  else
+    stopStrategyPolling()
+
   if (strategyNoTradeSummary.value)
     window.$message.warning(`策略回测完成：当前区间无成交信号。${strategyNoTradeSummary.value}`)
+  else if (aiStatus === 'pending' || aiStatus === 'processing')
+    window.$message.success('策略回测完成，AI 解读生成中')
   else
     window.$message.success('策略回测完成')
 }
@@ -1340,6 +1496,15 @@ const strategyHistoryColumns = [
     key: 'strategies',
     render: (row: StrategyRunHistoryItem) => row.strategies.map(item => item.strategyName).join(', '),
   },
+  {
+    title: 'AI 解读',
+    key: 'aiInterpretationStatus',
+    render: (row: StrategyRunHistoryItem) => h(
+      NTag,
+      { size: 'small', type: strategyAiStatusTagType(row.aiInterpretationStatus) },
+      { default: () => strategyAiStatusText(row.aiInterpretationStatus) },
+    ),
+  },
   { title: '创建时间', key: 'createdAt' },
   {
     title: '操作',
@@ -1499,11 +1664,13 @@ onActivated(async () => {
 })
 
 onDeactivated(() => {
+  stopStrategyPolling()
   stopAgentPolling()
   persistBacktestSnapshot()
 })
 
 onBeforeUnmount(() => {
+  stopStrategyPolling()
   stopAgentPolling()
   persistBacktestSnapshot()
 })
@@ -1663,6 +1830,12 @@ onBeforeUnmount(() => {
             <n-alert v-if="mode === 'agent' && currentAgentRun?.status === 'refining'" type="warning" :show-icon="false">
               精修中：当前展示快速阶段结果，系统会每 5 秒自动刷新。
             </n-alert>
+            <n-alert v-if="mode === 'strategy' && strategyInterpretationPending" type="warning" :show-icon="false">
+              策略回测已完成，AI 解读生成中，系统会每 5 秒自动刷新。
+            </n-alert>
+            <n-alert v-if="mode === 'strategy' && strategyInterpretationFailed" type="error" :show-icon="false">
+              AI 解读任务失败，当前回测数据仍可正常查看。{{ currentStrategyRun?.aiInterpretationErrorMessage || '请稍后重试。' }}
+            </n-alert>
             <n-alert v-if="recoveryNotice" type="warning" :show-icon="false">
               {{ recoveryNotice }}
             </n-alert>
@@ -1698,6 +1871,11 @@ onBeforeUnmount(() => {
                 </n-descriptions-item>
                 <n-descriptions-item label="引擎版本">
                   {{ currentStrategyRun.engineVersion }}
+                </n-descriptions-item>
+                <n-descriptions-item label="AI 解读">
+                  <NTag size="small" :type="strategyAiStatusTagType(currentStrategyRun.aiInterpretationStatus)">
+                    {{ strategyAiStatusText(currentStrategyRun.aiInterpretationStatus) }}
+                  </NTag>
                 </n-descriptions-item>
                 <n-descriptions-item label="策略数量">
                   {{ currentStrategyRun.items.length }}
@@ -1769,6 +1947,14 @@ onBeforeUnmount(() => {
         </n-card>
       </n-grid-item>
     </n-grid>
+
+    <BacktestAiInterpretationPanel
+      :mode="mode"
+      :items="mode === 'strategy' ? strategyInterpretationItems : agentInterpretationItems"
+      :pending="mode === 'strategy' ? strategyInterpretationPending : agentInterpretationPending"
+      :job-status="mode === 'strategy' ? currentStrategyRun?.aiInterpretationStatus : currentAgentRun?.status"
+      :error-message="mode === 'strategy' ? currentStrategyRun?.aiInterpretationErrorMessage : null"
+    />
 
     <template v-if="mode === 'strategy'">
       <n-grid :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.outerGap" :y-gap="DASHBOARD_LAYOUT.outerGap" responsive="screen">

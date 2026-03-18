@@ -33,6 +33,9 @@ export interface UserAiSettings {
   baseUrl: string
   model: string
   hasToken: boolean
+  apiToken: string
+  apiTokenReadable: boolean
+  apiTokenReadIssue: string
   apiTokenMasked: string
   source: 'system' | 'personal'
   hasSystemToken: boolean
@@ -85,6 +88,9 @@ export function createDefaultUserSettings(): UserSettingsResponse {
       baseUrl: '',
       model: '',
       hasToken: false,
+      apiToken: '',
+      apiTokenReadable: true,
+      apiTokenReadIssue: '',
       apiTokenMasked: '',
       source: 'system',
       hasSystemToken: false,

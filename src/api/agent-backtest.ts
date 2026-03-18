@@ -7,6 +7,8 @@ import type {
   AgentBacktestRunRequest,
 } from '@/types/agent-backtest'
 
+const backtestRunTimeout = Number(import.meta.env.VITE_BACKTEST_RUN_TIMEOUT || '150000')
+
 export async function runAgentBacktest(payload: AgentBacktestRunRequest): Promise<AgentBacktestDetailResponse> {
   const body: Record<string, unknown> = {
     code: payload.code,
@@ -24,7 +26,7 @@ export async function runAgentBacktest(payload: AgentBacktestRunRequest): Promis
   if (payload.enableRefine != null)
     body.enable_refine = payload.enableRefine
 
-  const { data } = await client.post('/api/v1/backtest/agent/run', body)
+  const { data } = await client.post('/api/v1/backtest/agent/run', body, { timeout: backtestRunTimeout })
   return toCamelCase<AgentBacktestDetailResponse>(data)
 }
 

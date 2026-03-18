@@ -25,16 +25,41 @@
 
 - Node.js：建议与项目当前依赖兼容的现代版本
 - pnpm：项目脚本基于 pnpm
+- python3：`pnpm start` 使用它把 Vite 进程稳定托管到后台
 
 ### 常用命令
 
 ```bash
 pnpm install
 pnpm dev
+pnpm start
+pnpm stop
 pnpm build
 pnpm typecheck
 pnpm lint
 ```
+
+- `pnpm dev`：前台启动 Vite 开发服务，当前终端退出或 `Ctrl+C` 后进程结束
+- `pnpm start`：后台启动当前前端项目，自动写入 PID 和日志，并等待 `http://127.0.0.1:5173` 就绪
+- `pnpm stop`：停止由当前仓库托管的前端进程，并清理 5173 端口占用
+
+后台启停脚本也可以直接调用：
+
+```bash
+bash scripts/system/start.sh
+bash scripts/system/stop.sh
+```
+
+运行时文件约定如下：
+
+- 日志：`/tmp/stocksim/logs/frontend.log`
+- PID：`/tmp/stocksim/pids/frontend.pid`
+
+常见失败场景：
+
+- 未安装依赖：先执行 `pnpm install`
+- `5173` 端口被其他进程占用：脚本会直接报错并输出占用进程命令
+- 已有同一个前端实例在跑：`pnpm start` 会自动接管，不会重复启动
 
 ### 环境变量
 

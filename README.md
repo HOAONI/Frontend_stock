@@ -56,6 +56,7 @@ This project uses ApiFox for interface mock, check the online documentation for 
 ## Install and use
 
 The local development environment is recommended to use pnpm 10.x, Node.js version 21.x.
+If you use `pnpm start` for background startup, make sure `python3` is available locally.
 
 It is recommended to directly download the compressed package from [Releases](https://github.com/chansee97/nova-admin/releases)
 
@@ -63,8 +64,12 @@ It is recommended to directly download the compressed package from [Releases](ht
 # install dependencies
 pnpm i
 
-# Run
+# Run in foreground
 pnpm dev
+
+# Start or stop the local frontend in background
+pnpm start
+pnpm stop
 
 # Build product
 pnpm build
