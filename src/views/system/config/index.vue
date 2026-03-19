@@ -56,7 +56,7 @@ const visibleItems = computed(() => {
 })
 
 const dirtyCount = computed(() => {
-  return items.value.filter(item => draft.value[item.key] !== item.value).length
+  return items.value.filter(item => isItemEditable(item) && draft.value[item.key] !== item.value).length
 })
 
 const activeCategoryDisplay = computed(() => getSystemConfigCategoryDisplay(activeCategory.value))
@@ -77,7 +77,19 @@ function getDataTypeTagType(item: SystemConfigItem): 'warning' | 'default' {
   return item.schema?.isSensitive ? 'warning' : 'default'
 }
 
+function isItemEditable(item?: SystemConfigItem | null): boolean {
+  return item?.schema?.isEditable !== false
+}
+
+function getEditLockReason(item?: SystemConfigItem | null): string {
+  return item?.schema?.editLockReason || ''
+}
+
 function setValue(key: string, value: string) {
+  const item = items.value.find(item => item.key === key)
+  if (!isItemEditable(item))
+    return
+
   draft.value = {
     ...draft.value,
     [key]: value,
@@ -116,7 +128,7 @@ async function loadConfig() {
 
 function collectChangedItems() {
   return items.value
-    .filter(item => draft.value[item.key] !== item.value)
+    .filter(item => isItemEditable(item) && draft.value[item.key] !== item.value)
     .map(item => ({
       key: item.key,
       value: draft.value[item.key],
@@ -181,6 +193,11 @@ async function handleImageUpload(event: Event) {
     const result = await extractStockCodesFromImage(file)
     const unique = [...new Set(result.codes)]
     const merged = unique.join(',')
+    const stockListItem = items.value.find(item => item.key === 'STOCK_LIST')
+    if (stockListItem && !isItemEditable(stockListItem)) {
+      errorText.value = getEditLockReason(stockListItem) || 'STOCK_LIST 当前不可通过后台修改'
+      return
+    }
     if (draft.value.STOCK_LIST != null) {
       setValue('STOCK_LIST', merged)
       successText.value = `图片识别成功，共提取 ${unique.length} 个代码`
@@ -275,6 +292,9 @@ onMounted(loadConfig)
                       <n-tag size="small" round :type="getDataTypeTagType(item)">
                         {{ getSystemConfigDataTypeLabel(item.schema?.dataType) }}
                       </n-tag>
+                      <n-tag v-if="!isItemEditable(item)" size="small" round type="warning">
+                        已锁定
+                      </n-tag>
                     </n-space>
                   </template>
 
@@ -287,6 +307,7 @@ onMounted(loadConfig)
                       <n-switch
                         v-if="item.schema?.uiControl === 'switch'"
                         :value="toDisplayValue(item) === 'true'"
+                        :disabled="!isItemEditable(item)"
                         @update:value="(value) => setValue(item.key, value ? 'true' : 'false')"
                       />
 
@@ -294,6 +315,7 @@ onMounted(loadConfig)
                         v-else-if="item.schema?.uiControl === 'number'"
                         :value="Number(toDisplayValue(item))"
                         style="width: 240px"
+                        :disabled="!isItemEditable(item)"
                         @update:value="(value) => setValue(item.key, String(value ?? ''))"
                       />
 
@@ -301,6 +323,7 @@ onMounted(loadConfig)
                         v-else-if="item.schema?.uiControl === 'textarea'"
                         type="textarea"
                         :value="toDisplayValue(item)"
+                        :disabled="!isItemEditable(item)"
                         @update:value="(value) => setValue(item.key, value)"
                       />
 
@@ -309,9 +332,17 @@ onMounted(loadConfig)
                         :type="item.schema?.isSensitive ? 'password' : 'text'"
                         show-password-on="click"
                         :value="toDisplayValue(item)"
+                        :disabled="!isItemEditable(item)"
                         @update:value="(value) => setValue(item.key, value)"
                       />
                     </n-form-item>
+
+                    <n-alert
+                      v-if="!isItemEditable(item) && getEditLockReason(item)"
+                      type="warning"
+                    >
+                      {{ getEditLockReason(item) }}
+                    </n-alert>
 
                     <n-text depth="3" class="text-12px">
                       当前分类：{{ getConfigDisplay(item).categoryTitle }}

@@ -57,6 +57,10 @@ defineOptions({
 
 const BACKTEST_SESSION_VERSION = 2
 const BACKTEST_PENDING_MATCH_TOLERANCE_MS = 2 * 60 * 1000
+const BACKTEST_PENDING_RECOVERY_INTERVAL_MS = 5000
+const BACKTEST_PENDING_RECOVERY_TIMEOUT_MS = 2 * 60 * 1000
+const BACKTEST_PENDING_RECOVERY_NOTICE = '检测到未完成回测，正在自动恢复'
+const BACKTEST_PENDING_RECOVERY_TIMEOUT_NOTICE = '上次回测结果未匹配到，请刷新历史查看'
 const STRATEGY_PARAM_LABELS: Record<string, string> = {
   maWindow: 'MA 周期',
   rsiPeriod: 'RSI 周期',
@@ -160,6 +164,9 @@ const equityOptions = ref<ECOption>({})
 const hydratingSnapshot = ref(false)
 let strategyPollTimer: ReturnType<typeof setInterval> | null = null
 let agentPollTimer: ReturnType<typeof setInterval> | null = null
+let pendingRecoveryTimer: ReturnType<typeof setInterval> | null = null
+let pendingRecoveryMode: BacktestMode | null = null
+let pendingRecoveryInFlight = false
 
 const strategyOptions = computed(() => {
   return userStrategies.value.map(item => ({
@@ -730,9 +737,48 @@ function buildAgentPendingRequest(): AgentPendingRequest {
   }
 }
 
+function getPendingRequestForMode(targetMode: BacktestMode): StrategyPendingRequest | AgentPendingRequest | null {
+  return targetMode === 'strategy' ? strategyPendingRequest.value : agentPendingRequest.value
+}
+
+function hasPendingRecoveryTarget(targetMode: BacktestMode): boolean {
+  if (targetMode === 'strategy')
+    return strategyPendingRequest.value != null && strategyActiveRunGroupId.value == null
+
+  return agentPendingRequest.value != null && agentActiveRunGroupId.value == null
+}
+
+function getPendingRecoveryDeadline(targetMode: BacktestMode): number | null {
+  const pending = getPendingRequestForMode(targetMode)
+  if (!pending)
+    return null
+
+  const startedAt = new Date(pending.startedAt).getTime()
+  if (!Number.isFinite(startedAt))
+    return null
+  return startedAt + BACKTEST_PENDING_RECOVERY_TIMEOUT_MS
+}
+
+function isPendingRecoveryTimedOut(targetMode: BacktestMode): boolean {
+  const deadline = getPendingRecoveryDeadline(targetMode)
+  return deadline != null && Date.now() >= deadline
+}
+
+function stopPendingRecoveryPolling(options: { clearNotice?: boolean } = {}) {
+  if (pendingRecoveryTimer) {
+    clearInterval(pendingRecoveryTimer)
+    pendingRecoveryTimer = null
+  }
+  pendingRecoveryMode = null
+  pendingRecoveryInFlight = false
+  if (options.clearNotice && recoveryNotice.value === BACKTEST_PENDING_RECOVERY_NOTICE)
+    recoveryNotice.value = ''
+}
+
 function clearCurrentDisplay() {
   stopStrategyPolling()
   stopAgentPolling()
+  stopPendingRecoveryPolling({ clearNotice: true })
   runError.value = ''
   recoveryNotice.value = ''
   currentStrategyRun.value = null
@@ -997,6 +1043,70 @@ function stopAgentPolling() {
   }
 }
 
+async function runPendingRecoveryTick(targetMode: BacktestMode): Promise<boolean> {
+  if (pendingRecoveryInFlight || pendingRecoveryMode !== targetMode || mode.value !== targetMode)
+    return false
+
+  if (!hasPendingRecoveryTarget(targetMode)) {
+    stopPendingRecoveryPolling({ clearNotice: true })
+    return false
+  }
+
+  if (isPendingRecoveryTimedOut(targetMode)) {
+    stopPendingRecoveryPolling()
+    recoveryNotice.value = BACKTEST_PENDING_RECOVERY_TIMEOUT_NOTICE
+    return false
+  }
+
+  pendingRecoveryInFlight = true
+  recoveryNotice.value = BACKTEST_PENDING_RECOVERY_NOTICE
+  try {
+    const restored = await restoreCurrentModeState()
+    if (restored || !hasPendingRecoveryTarget(targetMode)) {
+      stopPendingRecoveryPolling({ clearNotice: true })
+      return restored
+    }
+    if (isPendingRecoveryTimedOut(targetMode)) {
+      stopPendingRecoveryPolling()
+      recoveryNotice.value = BACKTEST_PENDING_RECOVERY_TIMEOUT_NOTICE
+      return false
+    }
+    recoveryNotice.value = BACKTEST_PENDING_RECOVERY_NOTICE
+    return false
+  }
+  finally {
+    pendingRecoveryInFlight = false
+  }
+}
+
+function syncPendingRecoveryPolling(targetMode: BacktestMode, options: { immediate?: boolean } = {}) {
+  if (pendingRecoveryMode && pendingRecoveryMode !== targetMode)
+    stopPendingRecoveryPolling({ clearNotice: true })
+
+  if (!hasPendingRecoveryTarget(targetMode)) {
+    stopPendingRecoveryPolling({ clearNotice: true })
+    return
+  }
+
+  if (isPendingRecoveryTimedOut(targetMode)) {
+    stopPendingRecoveryPolling()
+    recoveryNotice.value = BACKTEST_PENDING_RECOVERY_TIMEOUT_NOTICE
+    return
+  }
+
+  if (pendingRecoveryMode !== targetMode || !pendingRecoveryTimer) {
+    stopPendingRecoveryPolling({ clearNotice: true })
+    pendingRecoveryMode = targetMode
+    pendingRecoveryTimer = setInterval(() => {
+      void runPendingRecoveryTick(targetMode)
+    }, BACKTEST_PENDING_RECOVERY_INTERVAL_MS)
+  }
+
+  recoveryNotice.value = BACKTEST_PENDING_RECOVERY_NOTICE
+  if (options.immediate)
+    void runPendingRecoveryTick(targetMode)
+}
+
 function ensureStrategyPolling(runGroupId: number) {
   stopStrategyPolling()
   strategyPollTimer = setInterval(async () => {
@@ -1113,6 +1223,7 @@ async function loadStrategyDetail(runGroupId: number, options: { silent?: boolea
     else
       stopStrategyPolling()
     persistBacktestSnapshot()
+    syncPendingRecoveryPolling(mode.value)
   }
   catch (error: unknown) {
     stopStrategyPolling()
@@ -1142,8 +1253,10 @@ async function loadAgentDetail(runGroupId: number, options: { silent?: boolean, 
     else
       stopAgentPolling()
     persistBacktestSnapshot()
+    syncPendingRecoveryPolling(mode.value)
   }
   catch (error: unknown) {
+    stopAgentPolling()
     if (!options.silent)
       runError.value = (error as { response?: { data?: { message?: string } } })?.response?.data?.message || '加载 Agent 回测详情失败'
   }
@@ -1159,7 +1272,7 @@ async function loadDetail(runGroupId: number) {
     await loadAgentDetail(runGroupId)
 }
 
-async function restoreStrategyPendingRun(showNotice = true): Promise<boolean> {
+async function restoreStrategyPendingRun(): Promise<boolean> {
   const pending = strategyPendingRequest.value
   if (!pending)
     return false
@@ -1180,24 +1293,19 @@ async function restoreStrategyPendingRun(showNotice = true): Promise<boolean> {
     )
 
     // 回测任务可能在页面刷新期间完成，这里根据“请求签名”从历史里找回对应结果。
-    if (!match) {
-      if (showNotice)
-        recoveryNotice.value = '上次回测结果未匹配到，请刷新历史查看'
+    if (!match)
       return false
-    }
 
     strategyActiveRunGroupId.value = match.runGroupId
     await loadStrategyDetail(match.runGroupId, { silent: true })
     return currentStrategyRun.value?.runGroupId === match.runGroupId
   }
   catch {
-    if (showNotice)
-      recoveryNotice.value = '上次回测结果未匹配到，请刷新历史查看'
     return false
   }
 }
 
-async function restoreAgentPendingRun(showNotice = true): Promise<boolean> {
+async function restoreAgentPendingRun(): Promise<boolean> {
   const pending = agentPendingRequest.value
   if (!pending)
     return false
@@ -1216,19 +1324,14 @@ async function restoreAgentPendingRun(showNotice = true): Promise<boolean> {
       && isPendingCreatedAtMatch(item.createdAt, pending.startedAt),
     )
 
-    if (!match) {
-      if (showNotice)
-        recoveryNotice.value = '上次回测结果未匹配到，请刷新历史查看'
+    if (!match)
       return false
-    }
 
     agentActiveRunGroupId.value = match.runGroupId
     await loadAgentDetail(match.runGroupId, { silent: true })
     return currentAgentRun.value?.runGroupId === match.runGroupId
   }
   catch {
-    if (showNotice)
-      recoveryNotice.value = '上次回测结果未匹配到，请刷新历史查看'
     return false
   }
 }
@@ -1265,15 +1368,15 @@ async function restoreActiveRunForMode(targetMode: BacktestMode): Promise<boolea
   return currentAgentRun.value?.runGroupId === runGroupId
 }
 
-async function restoreCurrentModeState(showNotice = false): Promise<boolean> {
+async function restoreCurrentModeState(): Promise<boolean> {
   recoveryNotice.value = ''
   if (await restoreActiveRunForMode(mode.value))
     return true
 
   if (mode.value === 'strategy')
-    return await restoreStrategyPendingRun(showNotice)
+    return await restoreStrategyPendingRun()
 
-  return await restoreAgentPendingRun(showNotice)
+  return await restoreAgentPendingRun()
 }
 
 async function hydrateBacktestCenter() {
@@ -1288,7 +1391,8 @@ async function hydrateBacktestCenter() {
   await applyBacktestSnapshot(snapshot)
   const historyPage = mode.value === 'strategy' ? strategyHistoryPage.value : agentHistoryPage.value
   await loadHistory(historyPage)
-  await restoreCurrentModeState(true)
+  await restoreCurrentModeState()
+  syncPendingRecoveryPolling(mode.value)
   rebuildEquityChart()
   persistBacktestSnapshot()
 }
@@ -1314,7 +1418,9 @@ async function runStrategyAction() {
   strategyActiveRunGroupId.value = response.data.runGroupId
   strategyPendingRequest.value = null
   recoveryNotice.value = ''
+  stopPendingRecoveryPolling({ clearNotice: true })
   rebuildEquityChart()
+  persistBacktestSnapshot()
   await loadStrategyHistory(1)
 
   const aiStatus = normalizeStrategyAiStatus(response.data.aiInterpretationStatus)
@@ -1351,7 +1457,9 @@ async function runAgentAction() {
   agentActiveRunGroupId.value = response.data.runGroupId
   agentPendingRequest.value = null
   recoveryNotice.value = ''
+  stopPendingRecoveryPolling({ clearNotice: true })
   rebuildEquityChart()
+  persistBacktestSnapshot()
   await loadAgentHistory(1)
 
   if (response.data.status === 'refining') {
@@ -1629,7 +1737,8 @@ watch(mode, async () => {
   clearCurrentDisplay()
   const page = mode.value === 'strategy' ? strategyHistoryPage.value : agentHistoryPage.value
   await loadHistory(page)
-  await restoreCurrentModeState(false)
+  await restoreCurrentModeState()
+  syncPendingRecoveryPolling(mode.value)
   persistBacktestSnapshot()
 })
 
@@ -1660,18 +1769,21 @@ onMounted(async () => {
 })
 
 onActivated(async () => {
-  await restoreCurrentModeState(false)
+  await restoreCurrentModeState()
+  syncPendingRecoveryPolling(mode.value)
 })
 
 onDeactivated(() => {
   stopStrategyPolling()
   stopAgentPolling()
+  stopPendingRecoveryPolling({ clearNotice: true })
   persistBacktestSnapshot()
 })
 
 onBeforeUnmount(() => {
   stopStrategyPolling()
   stopAgentPolling()
+  stopPendingRecoveryPolling({ clearNotice: true })
   persistBacktestSnapshot()
 })
 </script>

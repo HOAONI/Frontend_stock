@@ -2,33 +2,22 @@
 import { NTag } from 'naive-ui'
 import { h } from 'vue'
 import type { SystemConfigItem } from '@/types/system-config'
-import {
-  getSystemConfig,
-  SystemConfigConflictError,
-  SystemConfigValidationError,
-  updateSystemConfig,
-  validateSystemConfig,
-} from '@/api/system-config'
+import { getSystemConfig } from '@/api/system-config'
 import { getSystemConfigFieldDisplay } from '@/utils/system-config-display'
 
-// 管理端策略参数页只暴露与基础运行和回测直接相关的系统配置项。
+// 管理端策略参数页改为说明页，仅展示后端明确开放的系统级策略项。
 const loading = ref(false)
-const saving = ref(false)
 const filter = ref('')
 const errorText = ref('')
 
-const configVersion = ref('')
-const maskToken = ref('******')
 const items = ref<SystemConfigItem[]>([])
 
-const drawerVisible = ref(false)
-const currentItem = ref<SystemConfigItem | null>(null)
-const editValue = ref('')
-const editIssues = ref<string[]>([])
+const exposedItems = computed(() => {
+  return items.value.filter(item => item.schema?.visibleInStrategyPage)
+})
 
 const filteredItems = computed(() => {
-  return items.value
-    .filter(item => ['base', 'backtest'].includes(item.schema?.category || ''))
+  return exposedItems.value
     .filter((item) => {
       const keyword = filter.value.trim().toLowerCase()
       const display = getSystemConfigFieldDisplay(item)
@@ -76,8 +65,6 @@ async function load() {
   errorText.value = ''
   try {
     const config = await getSystemConfig(true)
-    configVersion.value = config.configVersion
-    maskToken.value = config.maskToken
     items.value = config.items
   }
   catch (error: unknown) {
@@ -85,61 +72,6 @@ async function load() {
   }
   finally {
     loading.value = false
-  }
-}
-
-function openEditor(item: SystemConfigItem) {
-  currentItem.value = item
-  editValue.value = item.value
-  editIssues.value = []
-  drawerVisible.value = true
-}
-
-async function saveCurrent() {
-  if (!currentItem.value)
-    return
-
-  saving.value = true
-  errorText.value = ''
-  editIssues.value = []
-
-  try {
-    const changed = [{
-      key: currentItem.value.key,
-      value: editValue.value,
-    }]
-
-    // 先走后端校验，再执行保存，避免抽屉里只能看到通用失败提示。
-    const validation = await validateSystemConfig({ items: changed })
-    if (!validation.valid) {
-      editIssues.value = validation.issues.map(issue => issue.message)
-      return
-    }
-
-    await updateSystemConfig({
-      configVersion: configVersion.value,
-      maskToken: maskToken.value,
-      reloadNow: true,
-      items: changed,
-    })
-
-    drawerVisible.value = false
-    window.$message.success('策略参数已更新')
-    await load()
-  }
-  catch (error: unknown) {
-    if (error instanceof SystemConfigValidationError) {
-      editIssues.value = error.issues.map(issue => issue.message)
-      return
-    }
-    if (error instanceof SystemConfigConflictError) {
-      errorText.value = '配置版本冲突，请重新加载后再试'
-      return
-    }
-    errorText.value = (error as { message?: string }).message || '保存失败'
-  }
-  finally {
-    saving.value = false
   }
 }
 
@@ -186,93 +118,38 @@ onMounted(load)
 
 <template>
   <n-space vertical :size="16">
-    <n-card title="策略参数管理" size="small">
+    <n-card title="策略参数说明" size="small">
       <n-space align="center" :wrap="true">
         <n-input v-model:value="filter" clearable placeholder="按参数名、用途说明或键名过滤" style="width: 360px" />
         <n-button :loading="loading" @click="load">
           刷新
         </n-button>
       </n-space>
-      <n-text depth="3" class="mt-3 block text-12px">
-        当前页面仅展示“基础配置”和“回测参数”两类与策略执行直接相关的配置项。
-      </n-text>
+      <n-alert type="info" class="mt-3">
+        当前系统级策略参数已收拢为保留项，不再提供后台直接调整。后续若重新开放少量可调项，会由后端 schema 明确下发并展示在此页。
+      </n-alert>
       <n-alert v-if="errorText" type="error" class="mt-3">
         {{ errorText }}
       </n-alert>
     </n-card>
 
-    <n-card size="small" title="参数列表">
-      <!-- 列表只承担入口职责，详细说明和编辑统一放到右侧抽屉。 -->
+    <n-card size="small" title="开放项一览">
+      <n-empty
+        v-if="exposedItems.length === 0"
+        description="当前没有开放可调的系统级策略参数"
+      />
+      <n-empty
+        v-else-if="filteredItems.length === 0"
+        description="没有匹配的开放项"
+      />
       <n-data-table
+        v-else
         :loading="loading"
         :columns="columns"
         :data="filteredItems"
         :row-key="(row: SystemConfigItem) => row.key"
-        :row-props="(row: SystemConfigItem) => ({ style: 'cursor:pointer', onClick: () => openEditor(row) })"
       />
     </n-card>
-
-    <n-drawer v-model:show="drawerVisible" :width="520">
-      <n-drawer-content title="编辑策略参数" closable>
-        <template v-if="currentItem">
-          <n-space vertical :size="12">
-            <n-descriptions
-              class="config-detail-descriptions"
-              :column="1"
-              bordered
-              size="small"
-              label-placement="left"
-            >
-              <n-descriptions-item label="参数名称">
-                {{ getSystemConfigFieldDisplay(currentItem).title }}
-              </n-descriptions-item>
-              <n-descriptions-item label="原始键名">
-                {{ currentItem.key }}
-              </n-descriptions-item>
-              <n-descriptions-item label="分类">
-                {{ getSystemConfigFieldDisplay(currentItem).categoryTitle }}
-              </n-descriptions-item>
-              <n-descriptions-item label="数据类型">
-                {{ getSystemConfigFieldDisplay(currentItem).dataTypeLabel }}
-              </n-descriptions-item>
-              <n-descriptions-item label="用途说明">
-                <span class="config-detail-value">
-                  {{ getSystemConfigFieldDisplay(currentItem).description || '暂未提供用途说明' }}
-                </span>
-              </n-descriptions-item>
-            </n-descriptions>
-
-            <n-form-item label="参数值">
-              <n-input
-                v-if="currentItem.schema?.uiControl !== 'textarea'"
-                v-model:value="editValue"
-                :type="currentItem.schema?.isSensitive ? 'password' : 'text'"
-                show-password-on="click"
-              />
-              <n-input
-                v-else
-                v-model:value="editValue"
-                type="textarea"
-                :autosize="{ minRows: 3, maxRows: 8 }"
-              />
-            </n-form-item>
-
-            <n-alert v-for="message in editIssues" :key="message" type="error">
-              {{ message }}
-            </n-alert>
-
-            <n-space justify="end">
-              <n-button @click="drawerVisible = false">
-                取消
-              </n-button>
-              <n-button type="primary" :loading="saving" @click="saveCurrent">
-                保存
-              </n-button>
-            </n-space>
-          </n-space>
-        </template>
-      </n-drawer-content>
-    </n-drawer>
   </n-space>
 </template>
 
@@ -299,27 +176,5 @@ onMounted(load)
   font-size: 13px;
   line-height: 1.5;
   white-space: normal;
-}
-
-.config-detail-value {
-  display: block;
-  line-height: 1.6;
-  white-space: normal;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-}
-
-.config-detail-descriptions :deep(.n-descriptions-table-header) {
-  width: 136px;
-  min-width: 136px;
-  vertical-align: top;
-  white-space: nowrap;
-}
-
-.config-detail-descriptions :deep(.n-descriptions-table-content) {
-  vertical-align: top;
-  white-space: normal;
-  word-break: break-word;
-  overflow-wrap: anywhere;
 }
 </style>

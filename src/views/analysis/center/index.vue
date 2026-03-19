@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { analyzeAsync, DuplicateTaskError, getHistoryDetail, getHistoryList, getHistoryNews, getTaskList } from '@/api/analysis'
+import { analyzeAsync, DuplicateTaskError, getHistoryDetail, getHistoryList, getHistoryNews, getTaskList, getTaskStatus } from '@/api/analysis'
 import { useTaskQueueState } from '@/composables/useTaskQueueState'
 import { useTaskStream } from '@/composables/useTaskStream'
 import { CARD_DENSITY, DASHBOARD_LAYOUT, GRID_GAP, SPACING } from '@/constants/design-tokens'
 import { resolveAgentStages } from '@/services/analysis-service'
 import { useBrokerAccountStore } from '@/store'
-import type { AnalysisReport, HistoryItem, NewsIntelItem, TaskInfo, TaskListResponse } from '@/types/analysis'
+import type { AnalysisReport, HistoryItem, HistoryStatusFilter, NewsIntelItem, TaskInfo, TaskListResponse } from '@/types/analysis'
 import type { AgentStageItem } from '@/types/agent-stages'
 import { formatDateTime, validateStockCode } from '@/utils/stock'
 import { useThemeVars } from 'naive-ui'
@@ -33,6 +33,7 @@ const historyItems = ref<HistoryItem[]>([])
 const historyListTotal = ref(0)
 const historyPage = ref(1)
 const historyLimit = ref(5)
+const historyFilter = ref<HistoryStatusFilter>('all')
 const historyLoading = ref(false)
 const taskStats = ref<Pick<TaskListResponse, 'completed' | 'failed' | 'cancelled'>>({
   completed: 0,
@@ -53,10 +54,18 @@ const stageMissingApis = ref<string[]>([])
 const stageWarnings = ref<string[]>([])
 const recentReportModalVisible = ref(false)
 const recentReportModalLoading = ref(false)
+const recentReportModalMode = ref<'report' | 'failed'>('report')
 const recentReportModalTab = ref<'summary' | 'strategy' | 'stages' | 'news'>('summary')
 const recentReportModalQueryId = ref('')
 const recentReportModalReport = ref<AnalysisReport | null>(null)
 const recentReportModalNews = ref<NewsIntelItem[]>([])
+const recentReportModalFailedDetail = ref<{
+  taskId: string
+  stockCode: string
+  stockName: string
+  finishedAt: string
+  errorMessage: string
+} | null>(null)
 const recentReportModalStageItems = ref<AgentStageItem[]>([])
 const recentReportModalStageSource = ref<'api' | 'mock' | 'derived'>('derived')
 const recentReportModalStageMissingApis = ref<string[]>([])
@@ -102,6 +111,11 @@ const stageSourceText = computed(() => stageSourceTextOf(stageSource.value))
 const recentReportModalStageSourceType = computed<'success' | 'warning' | 'error'>(() => stageSourceTypeOf(recentReportModalStageSource.value))
 const recentReportModalStageSourceText = computed(() => stageSourceTextOf(recentReportModalStageSource.value))
 const recentReportModalTitle = computed(() => {
+  if (recentReportModalMode.value === 'failed') {
+    if (!recentReportModalFailedDetail.value)
+      return '失败详情'
+    return `失败详情 · ${recentReportModalFailedDetail.value.stockCode}`
+  }
   if (!recentReportModalReport.value)
     return '历史报告详情'
   return `历史报告详情 · ${recentReportModalReport.value.meta.stockCode}`
@@ -124,12 +138,17 @@ interface RecentResultDisplayItem {
 }
 
 interface HistoryResultDisplayItem {
+  key: string
   queryId: string
+  taskId: string | null
   stockCode: string
   stockName: string
   finishedAt: string
   summaryText: string
-  statusTagType: 'success'
+  status: 'completed' | 'failed'
+  statusTagType: 'success' | 'error'
+  actionText: string
+  canOpenDetail: boolean
 }
 
 interface AnalysisOverviewCard {
@@ -244,6 +263,33 @@ function statusLabel(status: TaskInfo['status']): string {
   return '失败'
 }
 
+function historyStatusText(status: HistoryItem['status']): string {
+  return status === 'completed' ? '成功' : '失败'
+}
+
+function resetMainReportState() {
+  selectedQueryId.value = ''
+  selectedReport.value = null
+  selectedNews.value = []
+  stageItems.value = []
+  stageSource.value = 'derived'
+  stageMissingApis.value = []
+  stageWarnings.value = []
+}
+
+function resetRecentReportModalState() {
+  recentReportModalQueryId.value = ''
+  recentReportModalMode.value = 'report'
+  recentReportModalReport.value = null
+  recentReportModalNews.value = []
+  recentReportModalFailedDetail.value = null
+  recentReportModalStageItems.value = []
+  recentReportModalStageSource.value = 'derived'
+  recentReportModalStageMissingApis.value = []
+  recentReportModalStageWarnings.value = []
+  recentReportModalError.value = ''
+}
+
 function runningTaskTime(task: TaskInfo): string {
   return formatDateTime(task.startedAt || task.createdAt)
 }
@@ -300,7 +346,7 @@ const recentResultItems = computed<RecentResultDisplayItem[]>(() => {
       return
 
     const taskTimestamp = toTimestamp(finishedAt)
-    const stockHistories = historyItems.value.filter(item => item.stockCode === task.stockCode)
+    const stockHistories = historyItems.value.filter(item => item.status === 'completed' && item.stockCode === task.stockCode)
 
     let hasBestMatch = false
     let bestMatchStockName = ''
@@ -315,7 +361,7 @@ const recentResultItems = computed<RecentResultDisplayItem[]>(() => {
         hasBestMatch = true
         bestMatchStockName = item.stockName || ''
         bestMatchAdvice = item.operationAdvice || ''
-        bestMatchQueryId = item.queryId
+        bestMatchQueryId = item.queryId || null
       }
     })
 
@@ -370,14 +416,27 @@ const analysisOverviewCards = computed<AnalysisOverviewCard[]>(() => {
 })
 
 const historyResultItems = computed<HistoryResultDisplayItem[]>(() => {
-  return historyItems.value.map(item => ({
-    queryId: item.queryId,
-    stockCode: item.stockCode,
-    stockName: item.stockName || '--',
-    finishedAt: item.createdAt,
-    summaryText: item.operationAdvice || '--',
-    statusTagType: 'success',
-  }))
+  return historyItems.value.map((item) => {
+    const isCompleted = item.status === 'completed'
+    const queryId = item.queryId || ''
+    const taskId = item.taskId || item.queryId || null
+
+    return {
+      key: `${item.status}:${taskId || queryId || `${item.stockCode}:${item.createdAt}`}`,
+      queryId,
+      taskId,
+      stockCode: item.stockCode,
+      stockName: item.stockName || '--',
+      finishedAt: item.createdAt,
+      summaryText: isCompleted
+        ? item.operationAdvice || '--'
+        : item.errorMessage || '分析失败（无详细错误）',
+      status: item.status,
+      statusTagType: isCompleted ? 'success' : 'error',
+      actionText: isCompleted ? '查看报告' : '查看失败详情',
+      canOpenDetail: isCompleted ? Boolean(queryId) : Boolean(taskId),
+    }
+  })
 })
 
 function overviewStatisticStyle(type: AnalysisOverviewCard['type']): CSSProperties | undefined {
@@ -421,8 +480,9 @@ async function openReportModalByQueryId(queryId: string) {
   const currentSeq = ++modalLoadSeq
   recentReportModalVisible.value = true
   recentReportModalLoading.value = true
+  resetRecentReportModalState()
+  recentReportModalMode.value = 'report'
   recentReportModalTab.value = 'summary'
-  recentReportModalError.value = ''
   recentReportModalQueryId.value = queryId
 
   try {
@@ -455,6 +515,65 @@ async function openReportModalByQueryId(queryId: string) {
   }
 }
 
+async function openFailedHistoryResult(item: HistoryResultDisplayItem) {
+  if (!item.taskId)
+    return
+
+  const currentSeq = ++modalLoadSeq
+  recentReportModalVisible.value = true
+  recentReportModalLoading.value = true
+  resetRecentReportModalState()
+  recentReportModalMode.value = 'failed'
+  recentReportModalTab.value = 'summary'
+  recentReportModalFailedDetail.value = {
+    taskId: item.taskId,
+    stockCode: item.stockCode,
+    stockName: item.stockName || '--',
+    finishedAt: item.finishedAt,
+    errorMessage: item.summaryText || '分析失败（无详细错误）',
+  }
+
+  try {
+    const [status, stageResult] = await Promise.all([
+      getTaskStatus(item.taskId),
+      resolveAgentStages(item.taskId, null),
+    ])
+    if (currentSeq !== modalLoadSeq)
+      return
+
+    recentReportModalFailedDetail.value = {
+      taskId: item.taskId,
+      stockCode: item.stockCode,
+      stockName: item.stockName || '--',
+      finishedAt: item.finishedAt,
+      errorMessage: status.error || item.summaryText || '分析失败（无详细错误）',
+    }
+    recentReportModalStageItems.value = stageResult.data.stages
+    recentReportModalStageSource.value = stageResult.dataSource
+    recentReportModalStageMissingApis.value = stageResult.missingApis
+    recentReportModalStageWarnings.value = stageResult.warnings
+  }
+  catch {
+    if (currentSeq !== modalLoadSeq)
+      return
+    resetRecentReportModalState()
+    recentReportModalMode.value = 'failed'
+    recentReportModalFailedDetail.value = {
+      taskId: item.taskId,
+      stockCode: item.stockCode,
+      stockName: item.stockName || '--',
+      finishedAt: item.finishedAt,
+      errorMessage: item.summaryText || '分析失败（无详细错误）',
+    }
+    recentReportModalError.value = '加载失败详情失败，请稍后重试'
+    window.$message.error('加载失败详情失败')
+  }
+  finally {
+    if (currentSeq === modalLoadSeq)
+      recentReportModalLoading.value = false
+  }
+}
+
 async function openRecentResult(item: RecentResultDisplayItem) {
   if (!item.queryId)
     return
@@ -462,6 +581,14 @@ async function openRecentResult(item: RecentResultDisplayItem) {
 }
 
 async function openHistoryResult(item: HistoryResultDisplayItem) {
+  if (item.status === 'failed') {
+    await openFailedHistoryResult(item)
+    return
+  }
+
+  if (!item.queryId)
+    return
+
   await openReportModalByQueryId(item.queryId)
 }
 
@@ -474,12 +601,22 @@ async function refreshHistory(resetPage = false) {
     const result = await getHistoryList({
       page: historyPage.value,
       limit: historyLimit.value,
+      status: historyFilter.value,
     })
     historyItems.value = result.items
     historyListTotal.value = result.total
 
-    if (!selectedQueryId.value && result.items.length > 0)
-      await loadReport(result.items[0].queryId)
+    const currentSelectedExists = result.items.some(item => item.status === 'completed' && item.queryId === selectedQueryId.value)
+    if (currentSelectedExists)
+      return
+
+    const firstCompleted = result.items.find(item => item.status === 'completed' && item.queryId)
+    if (firstCompleted?.queryId) {
+      await loadReport(firstCompleted.queryId)
+      return
+    }
+
+    resetMainReportState()
   }
   finally {
     historyLoading.value = false
@@ -603,6 +740,10 @@ async function submitAnalysis() {
 
 watch(executionMode, () => {
   executionError.value = ''
+})
+
+watch(historyFilter, () => {
+  void refreshHistory(true)
 })
 
 onMounted(async () => {
@@ -940,11 +1081,25 @@ onUnmounted(() => {
     </n-grid>
 
     <n-card title="历史分析记录" :size="CARD_DENSITY.default">
+      <template #header-extra>
+        <n-radio-group v-model:value="historyFilter" size="small">
+          <n-radio-button value="all">
+            全部
+          </n-radio-button>
+          <n-radio-button value="completed">
+            成功
+          </n-radio-button>
+          <n-radio-button value="failed">
+            失败
+          </n-radio-button>
+        </n-radio-group>
+      </template>
+
       <n-space vertical :size="SPACING.md">
         <n-spin :show="historyLoading">
           <n-empty v-if="historyResultItems.length === 0" description="暂无历史分析记录" />
           <n-list v-else hoverable>
-            <n-list-item v-for="item in historyResultItems" :key="item.queryId">
+            <n-list-item v-for="item in historyResultItems" :key="item.key">
               <n-card embedded :size="CARD_DENSITY.embedded">
                 <n-space justify="space-between" align="center" :wrap="false" style="width: 100%;">
                   <n-space vertical :size="SPACING.sm" style="min-width: 0; flex: 1;">
@@ -956,13 +1111,13 @@ onUnmounted(() => {
                         {{ item.stockName }}
                       </n-text>
                       <n-tag size="small" :type="item.statusTagType">
-                        已完成
+                        {{ historyStatusText(item.status) }}
                       </n-tag>
                     </n-space>
                     <n-text depth="3">
-                      完成时间：{{ formatDateTime(item.finishedAt) }}
+                      结束时间：{{ formatDateTime(item.finishedAt) }}
                     </n-text>
-                    <n-ellipsis :line-clamp="2" tooltip>
+                    <n-ellipsis :line-clamp="2" tooltip :style="{ color: item.status === 'failed' ? themeVars.errorColor : undefined }">
                       {{ item.summaryText }}
                     </n-ellipsis>
                   </n-space>
@@ -971,9 +1126,10 @@ onUnmounted(() => {
                     type="primary"
                     tertiary
                     style="flex-shrink: 0;"
+                    :disabled="!item.canOpenDetail"
                     @click="openHistoryResult(item)"
                   >
-                    查看报告
+                    {{ item.actionText }}
                   </n-button>
                 </n-space>
               </n-card>
@@ -1011,7 +1167,7 @@ onUnmounted(() => {
           {{ recentReportModalError }}
         </n-alert>
 
-        <template v-else-if="recentReportModalReport">
+        <template v-if="recentReportModalMode === 'report' && recentReportModalReport">
           <n-tabs v-model:value="recentReportModalTab" type="line" animated>
             <n-tab-pane name="summary" tab="摘要">
               <n-space vertical :size="SPACING.md">
@@ -1154,7 +1310,89 @@ onUnmounted(() => {
           </n-tabs>
         </template>
 
-        <n-empty v-else description="暂无可展示的历史报告" />
+        <template v-else-if="recentReportModalMode === 'failed' && recentReportModalFailedDetail">
+          <n-tabs v-model:value="recentReportModalTab" type="line" animated>
+            <n-tab-pane name="summary" tab="失败信息">
+              <n-space vertical :size="SPACING.md">
+                <n-descriptions label-placement="left" bordered :column="1" size="small">
+                  <n-descriptions-item label="股票代码">
+                    {{ recentReportModalFailedDetail.stockCode }}
+                  </n-descriptions-item>
+                  <n-descriptions-item label="股票名称">
+                    {{ recentReportModalFailedDetail.stockName }}
+                  </n-descriptions-item>
+                  <n-descriptions-item label="结束时间">
+                    {{ formatDateTime(recentReportModalFailedDetail.finishedAt) }}
+                  </n-descriptions-item>
+                  <n-descriptions-item label="任务 ID">
+                    {{ recentReportModalFailedDetail.taskId }}
+                  </n-descriptions-item>
+                  <n-descriptions-item label="任务状态">
+                    <n-tag size="small" type="error">
+                      失败
+                    </n-tag>
+                  </n-descriptions-item>
+                </n-descriptions>
+
+                <n-alert type="error" :show-icon="false">
+                  {{ recentReportModalFailedDetail.errorMessage }}
+                </n-alert>
+              </n-space>
+            </n-tab-pane>
+
+            <n-tab-pane name="stages" tab="四阶段详情">
+              <n-space vertical :size="SPACING.sm">
+                <n-alert v-for="item in recentReportModalStageWarnings" :key="item" type="warning" :show-icon="false">
+                  {{ item }}
+                </n-alert>
+
+                <n-empty v-if="recentReportModalStageItems.length === 0" description="暂无阶段数据" />
+                <n-collapse v-else arrow-placement="right" accordion>
+                  <n-collapse-item v-for="stage in recentReportModalStageItems" :key="stage.code" :name="stage.code" :title="stage.title">
+                    <template #header-extra>
+                      <n-tag size="small" :type="stageStatusType(stage.status)">
+                        {{ stageStatusText(stage.status) }}
+                      </n-tag>
+                    </template>
+
+                    <n-space vertical :size="SPACING.md">
+                      <n-descriptions bordered :column="1" size="small" label-placement="left">
+                        <n-descriptions-item label="阶段摘要">
+                          {{ stage.summary || '--' }}
+                        </n-descriptions-item>
+                        <n-descriptions-item label="耗时">
+                          {{ stage.durationMs != null ? `${stage.durationMs}ms` : '--' }}
+                        </n-descriptions-item>
+                        <n-descriptions-item v-if="stage.errorMessage" label="错误信息">
+                          {{ stage.errorMessage }}
+                        </n-descriptions-item>
+                      </n-descriptions>
+
+                      <n-grid :cols="24" :x-gap="GRID_GAP.inner" :y-gap="GRID_GAP.inner" responsive="screen">
+                        <n-grid-item :span="24" :l-span="12">
+                          <n-card embedded title="输入摘要" :size="CARD_DENSITY.embedded">
+                            <n-scrollbar style="max-height: 300px;">
+                              <pre style="white-space: pre-wrap; word-break: break-word;">{{ pretty(stage.input) }}</pre>
+                            </n-scrollbar>
+                          </n-card>
+                        </n-grid-item>
+                        <n-grid-item :span="24" :l-span="12">
+                          <n-card embedded title="输出摘要" :size="CARD_DENSITY.embedded">
+                            <n-scrollbar style="max-height: 300px;">
+                              <pre style="white-space: pre-wrap; word-break: break-word;">{{ pretty(stage.output) }}</pre>
+                            </n-scrollbar>
+                          </n-card>
+                        </n-grid-item>
+                      </n-grid>
+                    </n-space>
+                  </n-collapse-item>
+                </n-collapse>
+              </n-space>
+            </n-tab-pane>
+          </n-tabs>
+        </template>
+
+        <n-empty v-else description="暂无可展示的历史详情" />
       </n-spin>
     </n-modal>
   </n-space>

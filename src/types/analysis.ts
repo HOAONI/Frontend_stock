@@ -102,13 +102,18 @@ export interface TaskStatus {
 }
 
 /** 历史报告列表中的单项摘要。 */
+export type HistoryStatusFilter = 'all' | 'completed' | 'failed'
+
 export interface HistoryItem {
-  queryId: string
+  queryId?: string | null
+  taskId?: string | null
   stockCode: string
   stockName?: string | null
   reportType?: string
   sentimentScore?: number | null
   operationAdvice?: string | null
+  status: 'completed' | 'failed'
+  errorMessage?: string | null
   createdAt: string
 }
 

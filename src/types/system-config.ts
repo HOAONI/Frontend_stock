@@ -19,6 +19,8 @@ export interface SystemConfigFieldSchema {
   isSensitive: boolean
   isRequired: boolean
   isEditable: boolean
+  visibleInStrategyPage: boolean
+  editLockReason?: string
   defaultValue?: string | null
   options: string[]
   validation: Record<string, unknown>

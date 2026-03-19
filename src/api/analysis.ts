@@ -2,7 +2,9 @@
 import type {
   AnalysisRequest,
   AnalysisResult,
+  HistoryItem,
   HistoryListResponse,
+  HistoryStatusFilter,
   NewsIntelResponse,
   TaskInfo,
   TaskListResponse,
@@ -10,6 +12,41 @@ import type {
 } from '@/types/analysis'
 import client from './client'
 import { toCamelCase } from './case'
+
+function normalizeOptionalText(value: unknown): string | null {
+  if (typeof value !== 'string')
+    return null
+  const normalized = value.trim()
+  return normalized || null
+}
+
+function normalizeHistoryStatus(item: Partial<HistoryItem>): HistoryItem['status'] {
+  if (item.status === 'completed' || item.status === 'failed')
+    return item.status
+  return normalizeOptionalText(item.errorMessage) ? 'failed' : 'completed'
+}
+
+function normalizeHistoryItem(input: unknown): HistoryItem {
+  const item = toCamelCase<Partial<HistoryItem>>(input)
+  const queryId = normalizeOptionalText(item.queryId) ?? null
+  const taskId = normalizeOptionalText(item.taskId) ?? queryId
+  const status = normalizeHistoryStatus(item)
+
+  return {
+    queryId,
+    taskId,
+    stockCode: normalizeOptionalText(item.stockCode) || '',
+    stockName: normalizeOptionalText(item.stockName),
+    reportType: normalizeOptionalText(item.reportType) ?? undefined,
+    sentimentScore: item.sentimentScore ?? null,
+    operationAdvice: normalizeOptionalText(item.operationAdvice),
+    status,
+    errorMessage: status === 'failed'
+      ? normalizeOptionalText(item.errorMessage) || '分析失败（无详细错误）'
+      : normalizeOptionalText(item.errorMessage),
+    createdAt: normalizeOptionalText(item.createdAt) || '',
+  }
+}
 
 /**
  * 用业务错误显式区分“任务已在运行中”的场景，
@@ -90,12 +127,14 @@ export async function getHistoryList(params: {
   stockCode?: string
   startDate?: string
   endDate?: string
+  status?: HistoryStatusFilter
   page?: number
   limit?: number
 } = {}): Promise<HistoryListResponse> {
   const query: Record<string, unknown> = {
     page: params.page || 1,
     limit: params.limit || 20,
+    status: params.status || 'completed',
   }
 
   if (params.stockCode)
@@ -106,7 +145,14 @@ export async function getHistoryList(params: {
     query.end_date = params.endDate
 
   const { data } = await client.get('/api/v1/history', { params: query })
-  return toCamelCase<HistoryListResponse>(data)
+  const result = toCamelCase<HistoryListResponse & { items?: unknown[] }>(data)
+
+  return {
+    total: Number(result.total ?? 0),
+    page: Number(result.page ?? query.page),
+    limit: Number(result.limit ?? query.limit),
+    items: (result.items || []).map(item => normalizeHistoryItem(item)),
+  }
 }
 
 /** 根据 queryId 读取一份完整历史报告。 */

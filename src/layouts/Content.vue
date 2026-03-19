@@ -14,7 +14,18 @@ const contentStyle = computed(() => {
 <template>
   <n-el :style="contentStyle">
     <router-view v-slot="{ Component, route }">
-      <component :is="Component" v-if="appStore.loadFlag" :key="route.fullPath" />
+      <KeepAlive>
+        <component
+          :is="Component"
+          v-if="appStore.loadFlag && route.meta.keepAlive"
+          :key="route.fullPath"
+        />
+      </KeepAlive>
+      <component
+        :is="Component"
+        v-if="appStore.loadFlag && !route.meta.keepAlive"
+        :key="route.fullPath"
+      />
     </router-view>
   </n-el>
 </template>
