@@ -30,13 +30,6 @@ export interface TradingAccountHeroModel {
   lastSyncedAt: string
 }
 
-export interface TradingAccountMetaItem {
-  key: string
-  label: string
-  value: string
-  type?: TradingUiType
-}
-
 export interface TradingAccountKpiModel {
   key: string
   label: string
@@ -45,20 +38,6 @@ export interface TradingAccountKpiModel {
   suffix?: string
   valueStyle?: CSSProperties
   caption: string
-}
-
-export interface TradingAccountCountItem {
-  key: string
-  label: string
-  value: number
-}
-
-export interface TradingAccountRatioItem {
-  key: string
-  label: string
-  percentage: number
-  status: 'success' | 'info'
-  valueLabel: string
 }
 
 export interface TradingAccountActivityItem {

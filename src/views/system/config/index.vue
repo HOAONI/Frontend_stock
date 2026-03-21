@@ -1,387 +1,254 @@
 <script setup lang="ts">
-import type { ConfigValidationIssue, SystemConfigCategorySchema, SystemConfigItem } from '@/types/system-config'
-import {
-  getSystemConfig,
-  SystemConfigConflictError,
-  SystemConfigValidationError,
-  updateSystemConfig,
-  validateSystemConfig,
-} from '@/api/system-config'
-import { extractStockCodesFromImage } from '@/api/stocks'
-import {
-  getSystemConfigCategoryDisplay,
-  getSystemConfigDataTypeLabel,
-  getSystemConfigFieldDisplay,
-} from '@/utils/system-config-display'
+import type { MarketSourceOption } from '@/types/market-source'
+import { getMarketSourceConfig, updateMarketSource } from '@/api/market-source'
+import { formatDateTime } from '@/utils/stock'
 
-// 系统配置页按分类聚合字段，并维护一份可编辑草稿，避免直接改写服务端原值。
 const loading = ref(false)
 const saving = ref(false)
 const errorText = ref('')
 const successText = ref('')
+const persistedSource = ref('')
+const selectedSource = ref('')
+const updatedAt = ref<string | null>(null)
+const options = ref<MarketSourceOption[]>([])
 
-const configVersion = ref('')
-const maskToken = ref('******')
-const items = ref<SystemConfigItem[]>([])
-const draft = ref<Record<string, string>>({})
-const activeCategory = ref('base')
-const issues = ref<ConfigValidationIssue[]>([])
-
-const categories = computed<SystemConfigCategorySchema[]>(() => {
-  const map = new Map<string, SystemConfigCategorySchema>()
-  items.value.forEach((item) => {
-    const schema = item.schema
-    if (!schema)
-      return
-    const categoryDisplay = getSystemConfigCategoryDisplay(schema.category)
-    if (!map.has(schema.category)) {
-      map.set(schema.category, {
-        category: schema.category,
-        title: categoryDisplay.title,
-        description: categoryDisplay.description,
-        displayOrder: schema.displayOrder,
-        fields: [],
-      })
-    }
-    map.get(schema.category)?.fields.push(schema)
-  })
-
-  return Array.from(map.values()).sort((a, b) => a.displayOrder - b.displayOrder)
+const currentOption = computed(() => {
+  return options.value.find(option => option.code === persistedSource.value) || null
 })
 
-const visibleItems = computed(() => {
-  return items.value
-    .filter(item => (item.schema?.category || 'uncategorized') === activeCategory.value)
-    .sort((a, b) => (a.schema?.displayOrder || 9999) - (b.schema?.displayOrder || 9999))
+const selectedOption = computed(() => {
+  return options.value.find(option => option.code === selectedSource.value) || null
 })
 
-const dirtyCount = computed(() => {
-  return items.value.filter(item => isItemEditable(item) && draft.value[item.key] !== item.value).length
+const currentSourceText = computed(() => {
+  return currentOption.value?.label || persistedSource.value || '--'
 })
 
-const activeCategoryDisplay = computed(() => getSystemConfigCategoryDisplay(activeCategory.value))
+const currentStatusText = computed(() => {
+  return currentOption.value?.available === false ? '不可用' : '可用'
+})
 
-function issueMessages(key: string) {
-  return issues.value.filter(issue => issue.key === key).map(issue => issue.message)
-}
+const formattedUpdatedAt = computed(() => {
+  return formatDateTime(updatedAt.value)
+})
 
-function toDisplayValue(item: SystemConfigItem): string {
-  return draft.value[item.key] ?? item.value
-}
+const hasChanges = computed(() => {
+  return Boolean(selectedSource.value) && selectedSource.value !== persistedSource.value
+})
 
-function getConfigDisplay(item: SystemConfigItem) {
-  return getSystemConfigFieldDisplay(item)
-}
+const canSave = computed(() => {
+  return hasChanges.value && selectedOption.value?.available
+})
 
-function getDataTypeTagType(item: SystemConfigItem): 'warning' | 'default' {
-  return item.schema?.isSensitive ? 'warning' : 'default'
-}
+const pendingSelectionText = computed(() => {
+  return selectedOption.value?.label || selectedSource.value || '--'
+})
 
-function isItemEditable(item?: SystemConfigItem | null): boolean {
-  return item?.schema?.isEditable !== false
-}
-
-function getEditLockReason(item?: SystemConfigItem | null): string {
-  return item?.schema?.editLockReason || ''
-}
-
-function setValue(key: string, value: string) {
-  const item = items.value.find(item => item.key === key)
-  if (!isItemEditable(item))
-    return
-
-  draft.value = {
-    ...draft.value,
-    [key]: value,
-  }
-}
-
-async function loadConfig() {
-  loading.value = true
+function resetMessages() {
   errorText.value = ''
   successText.value = ''
+}
+
+async function loadMarketSource(loadOptions?: { preserveMessages?: boolean }) {
+  loading.value = true
+  if (!loadOptions?.preserveMessages)
+    resetMessages()
+
   try {
-    const data = await getSystemConfig(true)
-    configVersion.value = data.configVersion
-    maskToken.value = data.maskToken
-    items.value = data.items
-
-    const nextDraft: Record<string, string> = {}
-    data.items.forEach((item) => {
-      nextDraft[item.key] = item.value
-    })
-    // 草稿只在加载或保存后整体重建，便于精确计算脏字段数量和校验问题。
-    draft.value = nextDraft
-    issues.value = []
-
-    const firstCategory = data.items.find(item => item.schema?.category)?.schema?.category
-    if (firstCategory)
-      activeCategory.value = firstCategory
+    const data = await getMarketSourceConfig()
+    persistedSource.value = data.currentSource
+    selectedSource.value = data.currentSource
+    updatedAt.value = data.updatedAt || null
+    options.value = data.options
   }
   catch (error: unknown) {
-    errorText.value = (error as { message?: string }).message || '加载系统配置失败'
+    errorText.value = (error as { response?: { data?: { message?: string } }, message?: string })?.response?.data?.message
+      || (error as { message?: string }).message
+      || '加载全局行情源失败'
   }
   finally {
     loading.value = false
   }
 }
 
-function collectChangedItems() {
-  return items.value
-    .filter(item => isItemEditable(item) && draft.value[item.key] !== item.value)
-    .map(item => ({
-      key: item.key,
-      value: draft.value[item.key],
-    }))
-}
+async function saveMarketSource() {
+  if (!canSave.value)
+    return
 
-async function saveConfig() {
   saving.value = true
-  errorText.value = ''
-  successText.value = ''
+  resetMessages()
 
   try {
-    const changed = collectChangedItems()
-    if (changed.length === 0) {
-      successText.value = '没有需要保存的更改'
-      return
-    }
-
-    const validation = await validateSystemConfig({ items: changed })
-    issues.value = validation.issues
-    if (!validation.valid) {
-      errorText.value = '配置校验未通过，请修正后再保存'
-      return
-    }
-
-    await updateSystemConfig({
-      configVersion: configVersion.value,
-      maskToken: maskToken.value,
-      reloadNow: true,
-      items: changed,
-    })
-
-    successText.value = '配置保存成功'
-    await loadConfig()
+    const result = await updateMarketSource({ source: selectedSource.value })
+    persistedSource.value = result.currentSource
+    selectedSource.value = result.currentSource
+    updatedAt.value = result.updatedAt
+    await loadMarketSource({ preserveMessages: true })
+    successText.value = `已切换为 ${selectedOption.value?.label || result.currentSource}，新请求将使用该行情源`
   }
   catch (error: unknown) {
-    if (error instanceof SystemConfigValidationError) {
-      issues.value = error.issues
-      errorText.value = error.message
-      return
-    }
-
-    if (error instanceof SystemConfigConflictError) {
-      errorText.value = `${error.message}，请重新加载后再试`
-      return
-    }
-
-    errorText.value = (error as { message?: string }).message || '配置保存失败'
+    errorText.value = (error as { response?: { data?: { message?: string } }, message?: string })?.response?.data?.message
+      || (error as { message?: string }).message
+      || '保存全局行情源失败'
   }
   finally {
     saving.value = false
   }
 }
 
-async function handleImageUpload(event: Event) {
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (!file)
-    return
-
-  try {
-    const result = await extractStockCodesFromImage(file)
-    const unique = [...new Set(result.codes)]
-    const merged = unique.join(',')
-    const stockListItem = items.value.find(item => item.key === 'STOCK_LIST')
-    if (stockListItem && !isItemEditable(stockListItem)) {
-      errorText.value = getEditLockReason(stockListItem) || 'STOCK_LIST 当前不可通过后台修改'
-      return
-    }
-    if (draft.value.STOCK_LIST != null) {
-      setValue('STOCK_LIST', merged)
-      successText.value = `图片识别成功，共提取 ${unique.length} 个代码`
-    }
-    else {
-      successText.value = `识别结果：${merged}`
-    }
-  }
-  catch (error: unknown) {
-    errorText.value = (error as { response?: { data?: { message?: string } } })?.response?.data?.message || '图片识别失败'
-  }
-  finally {
-    target.value = ''
-  }
+function handleReload() {
+  void loadMarketSource()
 }
 
-onMounted(loadConfig)
+function handleSelectOption(option: MarketSourceOption) {
+  if (!option.available)
+    return
+
+  selectedSource.value = option.code
+}
+
+onMounted(() => {
+  void loadMarketSource()
+})
 </script>
 
 <template>
   <n-space vertical :size="16">
-    <n-card title="系统配置管理" size="small">
-      <!-- 顶部用于全局重载、保存和图片识股入口。 -->
-      <n-space align="center" :wrap="true">
-        <n-button :loading="loading" @click="loadConfig">
-          重新加载
-        </n-button>
-        <n-button type="primary" :loading="saving" @click="saveConfig">
-          保存配置（{{ dirtyCount }}）
-        </n-button>
-        <label class="cursor-pointer">
-          <n-button>图片识股（更新 STOCK_LIST）</n-button>
-          <input class="hidden" type="file" accept="image/*" @change="handleImageUpload">
-        </label>
+    <n-card title="全局行情源选择" size="small" :segmented="{ content: 'soft' }">
+      <template #header-extra>
+        <n-tag round type="info" size="small">
+          后台管理 / 配置管理
+        </n-tag>
+      </template>
+
+      <n-space vertical :size="16">
+        <n-text depth="3">
+          这里的选择会同时影响交易/分析链路，以及行情中心里的实时价、历史 K 线、指标和因子。
+          保存后立即对新发起的请求生效，运行中的任务不会被强制切换。
+        </n-text>
+
+        <n-grid :cols="24" :x-gap="12" :y-gap="12" responsive="screen">
+          <n-grid-item :span="24" :m-span="8">
+            <n-card embedded size="small">
+              <n-statistic label="当前全局行情源" :value="currentSourceText" />
+            </n-card>
+          </n-grid-item>
+          <n-grid-item :span="24" :m-span="8">
+            <n-card embedded size="small">
+              <n-statistic label="当前状态" :value="currentStatusText" />
+            </n-card>
+          </n-grid-item>
+          <n-grid-item :span="24" :m-span="8">
+            <n-card embedded size="small">
+              <n-statistic label="最近更新时间" :value="formattedUpdatedAt" />
+            </n-card>
+          </n-grid-item>
+        </n-grid>
       </n-space>
-      <n-alert v-if="errorText" class="mt-3" type="error">
-        {{ errorText }}
-      </n-alert>
-      <n-alert v-if="successText" class="mt-3" type="success">
-        {{ successText }}
-      </n-alert>
     </n-card>
 
-    <n-grid :cols="24" :x-gap="16" responsive="screen">
-      <n-grid-item :span="24" :l-span="6">
-        <n-card title="配置分类" size="small">
-          <n-menu
-            :value="activeCategory"
-            :options="categories.map((category) => ({
-              key: category.category,
-              label: `${category.title} (${items.filter(item => item.schema?.category === category.category).length})`,
-            }))"
-            @update:value="(key) => { activeCategory = String(key); }"
-          />
-        </n-card>
-      </n-grid-item>
+    <n-alert type="info" title="生效范围说明">
+      新请求会统一使用当前选中的行情源；这既包括 Agent 在交易/分析链路中的行情请求，也包括后台行情中心展示的 quote / history / indicators / factors。
+    </n-alert>
 
-      <n-grid-item :span="24" :l-span="18">
-        <n-card title="配置项" size="small">
-          <!-- 右侧主区域负责按分类展示字段，并直接承载编辑中的草稿值。 -->
-          <n-spin :show="loading">
-            <n-empty v-if="visibleItems.length === 0" description="当前分类暂无配置项" />
-            <n-form v-else label-placement="top">
-              <n-alert type="info" class="mb-4">
+    <n-alert v-if="errorText" type="error">
+      {{ errorText }}
+    </n-alert>
+    <n-alert v-if="successText" type="success">
+      {{ successText }}
+    </n-alert>
+
+    <n-card title="候选行情源" size="small" :segmented="{ content: 'soft' }">
+      <template #header-extra>
+        <n-space>
+          <n-button :loading="loading" @click="handleReload">
+            重新加载
+          </n-button>
+          <n-button
+            type="primary"
+            :disabled="!canSave"
+            :loading="saving"
+            @click="saveMarketSource"
+          >
+            保存并生效
+          </n-button>
+        </n-space>
+      </template>
+
+      <n-spin :show="loading">
+        <n-space vertical :size="12">
+          <n-alert v-if="hasChanges" type="warning" title="选择尚未保存">
+            已选择 {{ pendingSelectionText }}。点击“保存并生效”后，新请求才会切换到该行情源。
+          </n-alert>
+
+          <n-empty v-if="options.length === 0" description="暂无可选行情源" />
+
+          <n-radio-group v-else v-model:value="selectedSource">
+            <n-space vertical :size="12">
+              <n-card
+                v-for="option in options"
+                :key="option.code"
+                size="small"
+                :embedded="selectedSource !== option.code"
+                :segmented="{ content: 'soft' }"
+                @click="handleSelectOption(option)"
+              >
                 <template #header>
-                  {{ activeCategoryDisplay.title }}
-                </template>
-                {{ activeCategoryDisplay.description }}
-              </n-alert>
-              <n-space vertical :size="14">
-                <n-card
-                  v-for="item in visibleItems"
-                  :key="item.key"
-                  embedded
-                  size="small"
-                >
-                  <template #header>
-                    <div class="config-card-header">
-                      <div class="config-card-title">
-                        {{ getConfigDisplay(item).title }}
-                      </div>
-                      <div class="config-card-subtitle">
-                        {{ getConfigDisplay(item).categoryTitle }}
-                      </div>
-                    </div>
-                  </template>
-                  <template #header-extra>
-                    <n-space size="small" :wrap="true">
-                      <n-tag size="small" round>
-                        {{ item.key }}
-                      </n-tag>
-                      <n-tag size="small" round :type="getDataTypeTagType(item)">
-                        {{ getSystemConfigDataTypeLabel(item.schema?.dataType) }}
-                      </n-tag>
-                      <n-tag v-if="!isItemEditable(item)" size="small" round type="warning">
-                        已锁定
-                      </n-tag>
-                    </n-space>
-                  </template>
-
-                  <n-space vertical :size="10">
-                    <n-text depth="3" class="text-12px">
-                      {{ getConfigDisplay(item).description || '暂未提供用途说明' }}
+                  <n-space align="center">
+                    <n-radio :value="option.code" :disabled="!option.available" />
+                    <n-text strong>
+                      {{ option.label }}
                     </n-text>
+                  </n-space>
+                </template>
 
-                    <n-form-item label="配置值">
-                      <n-switch
-                        v-if="item.schema?.uiControl === 'switch'"
-                        :value="toDisplayValue(item) === 'true'"
-                        :disabled="!isItemEditable(item)"
-                        @update:value="(value) => setValue(item.key, value ? 'true' : 'false')"
-                      />
-
-                      <n-input-number
-                        v-else-if="item.schema?.uiControl === 'number'"
-                        :value="Number(toDisplayValue(item))"
-                        style="width: 240px"
-                        :disabled="!isItemEditable(item)"
-                        @update:value="(value) => setValue(item.key, String(value ?? ''))"
-                      />
-
-                      <n-input
-                        v-else-if="item.schema?.uiControl === 'textarea'"
-                        type="textarea"
-                        :value="toDisplayValue(item)"
-                        :disabled="!isItemEditable(item)"
-                        @update:value="(value) => setValue(item.key, value)"
-                      />
-
-                      <n-input
-                        v-else
-                        :type="item.schema?.isSensitive ? 'password' : 'text'"
-                        show-password-on="click"
-                        :value="toDisplayValue(item)"
-                        :disabled="!isItemEditable(item)"
-                        @update:value="(value) => setValue(item.key, value)"
-                      />
-                    </n-form-item>
-
-                    <n-alert
-                      v-if="!isItemEditable(item) && getEditLockReason(item)"
+                <template #header-extra>
+                  <n-space>
+                    <n-tag
+                      size="small"
+                      round
+                      :type="option.available ? 'success' : 'warning'"
+                    >
+                      {{ option.available ? '可用' : '不可用' }}
+                    </n-tag>
+                    <n-tag
+                      v-if="persistedSource === option.code"
+                      size="small"
+                      round
+                      type="info"
+                    >
+                      当前生效
+                    </n-tag>
+                    <n-tag
+                      v-if="selectedSource === option.code && hasChanges"
+                      size="small"
+                      round
                       type="warning"
                     >
-                      {{ getEditLockReason(item) }}
-                    </n-alert>
-
-                    <n-text depth="3" class="text-12px">
-                      当前分类：{{ getConfigDisplay(item).categoryTitle }}
-                    </n-text>
-
-                    <n-alert
-                      v-for="message in issueMessages(item.key)"
-                      :key="message"
-                      class="mt-2"
-                      type="error"
-                    >
-                      {{ message }}
-                    </n-alert>
+                      待保存
+                    </n-tag>
                   </n-space>
-                </n-card>
-              </n-space>
-            </n-form>
-          </n-spin>
-        </n-card>
-      </n-grid-item>
-    </n-grid>
+                </template>
+
+                <n-space vertical :size="12">
+                  <n-descriptions bordered :column="1" size="small" label-placement="left">
+                    <n-descriptions-item label="编码">
+                      {{ option.code }}
+                    </n-descriptions-item>
+                    <n-descriptions-item label="说明">
+                      {{ option.description || '--' }}
+                    </n-descriptions-item>
+                  </n-descriptions>
+
+                  <n-alert v-if="option.reason" type="warning" :show-icon="false">
+                    {{ option.reason }}
+                  </n-alert>
+                </n-space>
+              </n-card>
+            </n-space>
+          </n-radio-group>
+        </n-space>
+      </n-spin>
+    </n-card>
   </n-space>
 </template>
-
-<style scoped>
-.config-card-header {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.config-card-title {
-  font-weight: 600;
-  line-height: 1.5;
-}
-
-.config-card-subtitle {
-  color: var(--n-text-color-3);
-  font-size: 12px;
-  line-height: 1.4;
-}
-</style>

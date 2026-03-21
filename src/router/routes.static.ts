@@ -79,7 +79,7 @@ export const staticRoutes: AppRoute.RowRoute[] = [
     menuType: 'page',
     componentPath: '/system/config/index.vue',
     id: 401,
-    pid: null,
+    pid: 5,
   },
   {
     name: 'profileSettings',
@@ -114,18 +114,6 @@ export const staticRoutes: AppRoute.RowRoute[] = [
     componentPath: null,
     id: 5,
     pid: null,
-  },
-  {
-    name: 'adminStrategy',
-    path: '/admin/strategy',
-    title: '策略参数',
-    requiresAuth: true,
-    roles: ['admin'],
-    icon: 'icon-park-outline:setting-two',
-    menuType: 'page',
-    componentPath: '/admin/strategy/index.vue',
-    id: 501,
-    pid: 5,
   },
   {
     name: 'adminUsers',

@@ -19,6 +19,27 @@ export function validateStockCode(value: string): { valid: boolean, message?: st
   return { valid: true, normalized }
 }
 
+export function validateAShareMarketCode(value: string): { valid: boolean, message?: string, normalized: string } {
+  const normalized = value.trim().toUpperCase()
+  if (!normalized) {
+    return { valid: false, message: '请输入股票代码', normalized }
+  }
+
+  if (/^\d{6}$/.test(normalized)) {
+    return { valid: true, normalized }
+  }
+
+  if (/^(SH|SZ)\d{6}$/.test(normalized)) {
+    return { valid: true, normalized }
+  }
+
+  if (/^\d{6}\.(SH|SZ|SS)$/.test(normalized)) {
+    return { valid: true, normalized }
+  }
+
+  return { valid: false, message: 'A股行情页仅支持 SH/SZ/6 位代码', normalized }
+}
+
 export function toDateInputValue(date: Date): string {
   const year = date.getFullYear()
   const month = `${date.getMonth() + 1}`.padStart(2, '0')

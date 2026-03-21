@@ -9,7 +9,7 @@
 - 行情与策略展示：查看行情快照、K 线、指标和派生因子。
 - 回测中心：同时支持策略回测与 Agent 回放。
 - 交易账户中心：管理模拟盘绑定、资金变更、账户摘要和近期委托/成交。
-- 系统与用户配置：后台配置管理、个人 AI/模拟盘/策略默认值配置。
+- 系统与用户配置：后台管理中的全局行情源、个人 AI/模拟盘/策略默认值配置。
 
 如果你第一次接手这个项目，建议先看：
 
@@ -116,7 +116,7 @@ bash scripts/system/stop.sh
 - 回测中心：[src/views/backtest/center/index.vue](/Users/hoaon/Desktop/毕设相关/project/v4/Frontend_stock/src/views/backtest/center/index.vue)
 - 交易账户中心：[src/views/profile/trading/index.vue](/Users/hoaon/Desktop/毕设相关/project/v4/Frontend_stock/src/views/profile/trading/index.vue)
 - 个人配置：[src/views/profile/settings/index.vue](/Users/hoaon/Desktop/毕设相关/project/v4/Frontend_stock/src/views/profile/settings/index.vue)
-- 系统配置：[src/views/system/config/index.vue](/Users/hoaon/Desktop/毕设相关/project/v4/Frontend_stock/src/views/system/config/index.vue)
+- 配置管理（全局行情源）：[src/views/system/config/index.vue](/Users/hoaon/Desktop/毕设相关/project/v4/Frontend_stock/src/views/system/config/index.vue)
 - 管理端用户：[src/views/admin/users/index.vue](/Users/hoaon/Desktop/毕设相关/project/v4/Frontend_stock/src/views/admin/users/index.vue)
 - 管理端日志：[src/views/admin/logs/index.vue](/Users/hoaon/Desktop/毕设相关/project/v4/Frontend_stock/src/views/admin/logs/index.vue)
 
@@ -214,13 +214,13 @@ bash scripts/system/stop.sh
 
 不要直接在页面里硬写接口兼容逻辑，否则后续会很难维护。
 
-### 想改系统配置项展示
+### 想改全局行情源选择页
 
 先看：
 
 - [src/views/system/config/index.vue](/Users/hoaon/Desktop/毕设相关/project/v4/Frontend_stock/src/views/system/config/index.vue)
-- [src/utils/system-config-display.ts](/Users/hoaon/Desktop/毕设相关/project/v4/Frontend_stock/src/utils/system-config-display.ts)
-- [src/types/system-config.ts](/Users/hoaon/Desktop/毕设相关/project/v4/Frontend_stock/src/types/system-config.ts)
+- [src/api/market-source.ts](/Users/hoaon/Desktop/毕设相关/project/v4/Frontend_stock/src/api/market-source.ts)
+- [src/types/market-source.ts](/Users/hoaon/Desktop/毕设相关/project/v4/Frontend_stock/src/types/market-source.ts)
 
 ### 想改交易账户卡片/表格展示
 

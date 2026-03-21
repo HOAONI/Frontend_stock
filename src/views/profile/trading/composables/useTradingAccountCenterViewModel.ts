@@ -1,17 +1,14 @@
 import type { DataTableColumns } from 'naive-ui'
 import { NTag } from 'naive-ui'
 import { computed, h } from 'vue'
-import { lifecycleSemanticType, trendValueStyle } from '@/constants/semantic-ui'
+import { trendValueStyle } from '@/constants/semantic-ui'
 import { useBrokerAccountStore, useTradingAccountStore } from '@/store'
 import { formatDateTime, formatPct } from '@/utils/stock'
 import type {
   TradingAccountActivityItem,
-  TradingAccountCountItem,
   TradingAccountDetailTabModel,
   TradingAccountHeroModel,
   TradingAccountKpiModel,
-  TradingAccountMetaItem,
-  TradingAccountRatioItem,
   TradingUiType,
 } from '../types'
 
@@ -377,33 +374,6 @@ export function useTradingAccountCenterViewModel() {
 
   const homeSnapshot = computed(() => tradingAccountStore.homeSnapshot)
   const homeKpis = computed(() => tradingAccountStore.homeKpis)
-  // 部分后端只返回 totalAsset/cash，不直接返回 marketValue，这里前端补齐占比计算基准。
-  const marketValueForRatio = computed(() => {
-    if (homeKpis.value.marketValue != null)
-      return Math.max(homeKpis.value.marketValue, 0)
-    const totalAsset = homeKpis.value.totalAsset ?? 0
-    const cash = homeKpis.value.cash ?? 0
-    return Math.max(totalAsset - cash, 0)
-  })
-  const ratioTotal = computed(() => {
-    const cash = Math.max(homeKpis.value.cash ?? 0, 0)
-    const market = Math.max(marketValueForRatio.value, 0)
-    if (cash + market > 0)
-      return cash + market
-    return Math.max(homeKpis.value.totalAsset ?? 0, 0)
-  })
-  const cashRatio = computed(() => {
-    const total = ratioTotal.value
-    if (total <= 0)
-      return 0
-    return Math.min(100, Math.max(0, Number((((homeKpis.value.cash ?? 0) / total) * 100).toFixed(1))))
-  })
-  const marketRatio = computed(() => {
-    const total = ratioTotal.value
-    if (total <= 0)
-      return 0
-    return Math.min(100, Math.max(0, Number(((marketValueForRatio.value / total) * 100).toFixed(1))))
-  })
 
   const heroCard = computed<TradingAccountHeroModel>(() => {
     const accountLabel = simulationStatus.value?.accountDisplayName
@@ -423,39 +393,6 @@ export function useTradingAccountCenterViewModel() {
       lastVerifiedAt: formatDateTime(simulationStatus.value?.lastVerifiedAt),
       lastSyncedAt: formatDateTime(tradingAccountStore.lastLoadedAt || homeSnapshot.value.snapshotAt),
     }
-  })
-
-  const metaItems = computed<TradingAccountMetaItem[]>(() => {
-    return [
-      {
-        key: 'engine',
-        label: '交易引擎',
-        value: formatText(simulationStatus.value?.engine || 'backtrader'),
-        type: 'info',
-      },
-      {
-        key: 'region',
-        label: '合规区域',
-        value: formatText(simulationStatus.value?.complianceRegion || 'CN'),
-      },
-      {
-        key: 'auto-order',
-        label: '自动下单',
-        value: simulationStatus.value?.autoOrderEnabled ? '已启用' : '已关闭',
-        type: simulationStatus.value?.autoOrderEnabled ? 'success' : 'warning',
-      },
-      {
-        key: 'broker-account-id',
-        label: '账户 ID',
-        value: formatText(simulationStatus.value?.brokerAccountId),
-      },
-      {
-        key: 'snapshot-at',
-        label: '快照时间',
-        value: formatDateTime(homeSnapshot.value.snapshotAt || tradingAccountStore.lastLoadedAt),
-        type: homeSnapshot.value.snapshotAt ? lifecycleSemanticType('verified') : 'default',
-      },
-    ]
   })
 
   const kpiCards = computed<TradingAccountKpiModel[]>(() => {
@@ -490,45 +427,6 @@ export function useTradingAccountCenterViewModel() {
         suffix: '%',
         valueStyle: trendValueStyle(homeKpis.value.returnPct),
         caption: canLoadTradingData.value ? '累计收益率' : '快照未就绪',
-      },
-    ]
-  })
-
-  const summaryCounts = computed<TradingAccountCountItem[]>(() => {
-    return [
-      {
-        key: 'positions',
-        label: '持仓条目',
-        value: tradingAccountStore.positions?.total || 0,
-      },
-      {
-        key: 'orders',
-        label: '委托条目',
-        value: tradingAccountStore.orders?.total || 0,
-      },
-      {
-        key: 'trades',
-        label: '成交条目',
-        value: tradingAccountStore.trades?.total || 0,
-      },
-    ]
-  })
-
-  const summaryRatios = computed<TradingAccountRatioItem[]>(() => {
-    return [
-      {
-        key: 'cash-ratio',
-        label: '现金占比',
-        percentage: cashRatio.value,
-        status: 'info',
-        valueLabel: formatAmount(homeKpis.value.cash),
-      },
-      {
-        key: 'market-ratio',
-        label: '持仓占比',
-        percentage: marketRatio.value,
-        status: 'success',
-        valueLabel: formatAmount(marketValueForRatio.value),
       },
     ]
   })
@@ -619,12 +517,8 @@ export function useTradingAccountCenterViewModel() {
     canLoadTradingData,
     accountStateLabel,
     accountStateType,
-    stateDescription,
     heroCard,
-    metaItems,
     kpiCards,
-    summaryCounts,
-    summaryRatios,
     fundingReference,
     recentOrders,
     recentTrades,

@@ -2,8 +2,8 @@ import { getStockHistory, getStockQuote } from '@/api/stocks'
 import { getReservedFactors, getReservedIndicators } from '@/api/reserved-market'
 import type { FactorSnapshot, IntradayPoint, MarketViewModel } from '@/types/market-analytics'
 import type { StockHistoryPoint } from '@/types/stocks'
-import { computeFactors, computeMA } from '@/utils/indicators'
-import { getDataMode, getHttpStatus, isMissingApiStatus } from './data-source'
+import { computeMA } from '@/utils/indicators'
+import { getDataMode } from './data-source'
 import type { ServicePayload } from './data-source'
 
 function nowLabel(): string {
@@ -24,6 +24,13 @@ function defaultFactors(): FactorSnapshot {
   }
 }
 
+function normalizeFactorValue(value: unknown): number | null {
+  if (value == null || value === '')
+    return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 function buildModel(stockCode: string, bars: StockHistoryPoint[], quote: Awaited<ReturnType<typeof getStockQuote>> | null, intraday: IntradayPoint[], factors: FactorSnapshot): MarketViewModel {
   return {
     stockCode,
@@ -40,10 +47,9 @@ function buildModel(stockCode: string, bars: StockHistoryPoint[], quote: Awaited
   }
 }
 
-// 行情中心优先消费真实接口；指标/因子接口缺失时回退前端派生结果，避免整页失效。
+// 行情中心统一消费后端“当前全局行情源”接口，确保 quote / history / indicators / factors 口径一致。
 export async function fetchMarketBundle(stockCode: string, days: number): Promise<ServicePayload<MarketViewModel>> {
   const mode = getDataMode()
-  const missingApis: string[] = []
   const warnings: string[] = []
 
   const [quote, history] = await Promise.all([
@@ -52,41 +58,26 @@ export async function fetchMarketBundle(stockCode: string, days: number): Promis
   ])
 
   const bars = history.data || []
-  let factors = computeFactors(bars)
-  let source: 'api' | 'mock' | 'derived' = mode === 'mock' ? 'mock' : 'api'
+  let factors = defaultFactors()
+  const source: 'api' | 'mock' | 'derived' = mode === 'mock' ? 'mock' : 'api'
 
   if (mode !== 'mock' && bars.length > 0) {
     const latestDate = bars[bars.length - 1].date
-    try {
-      const [indicatorsResp, factorsResp] = await Promise.all([
-        getReservedIndicators(stockCode, days, [5, 10, 20, 60]),
-        getReservedFactors(stockCode, latestDate),
-      ])
-      const latest = indicatorsResp.items[indicatorsResp.items.length - 1]
-      if (latest?.mas) {
-        factors = {
-          ...factors,
-          ma5: Number(latest.mas.ma5 ?? factors.ma5),
-          ma10: Number(latest.mas.ma10 ?? factors.ma10),
-          ma20: Number(latest.mas.ma20 ?? factors.ma20),
-          ma60: Number(latest.mas.ma60 ?? factors.ma60),
-          rsi14: Number(factorsResp.factors.rsi14 ?? factors.rsi14),
-          momentum20: Number(factorsResp.factors.momentum20 ?? factors.momentum20),
-          volRatio5: Number(factorsResp.factors.volRatio5 ?? factors.volRatio5),
-          amplitude: Number(factorsResp.factors.amplitude ?? factors.amplitude),
-        }
-      }
-    }
-    catch (error: unknown) {
-      const status = getHttpStatus(error)
-      if (isMissingApiStatus(status)) {
-        source = 'derived'
-        missingApis.push('/api/v1/stocks/:code/indicators', '/api/v1/stocks/:code/factors')
-        warnings.push('指标/因子接口未开放，已使用前端派生结果')
-      }
-      else {
-        source = 'derived'
-        warnings.push('指标/因子接口调用失败，已使用前端派生结果')
+    const [indicatorsResp, factorsResp] = await Promise.all([
+      getReservedIndicators(stockCode, days, [5, 10, 20, 60]),
+      getReservedFactors(stockCode, latestDate),
+    ])
+    const latest = indicatorsResp.items[indicatorsResp.items.length - 1]
+    if (latest?.mas) {
+      factors = {
+        ma5: normalizeFactorValue(latest.mas.ma5),
+        ma10: normalizeFactorValue(latest.mas.ma10),
+        ma20: normalizeFactorValue(latest.mas.ma20),
+        ma60: normalizeFactorValue(latest.mas.ma60),
+        rsi14: normalizeFactorValue(factorsResp.factors.rsi14),
+        momentum20: normalizeFactorValue(factorsResp.factors.momentum20),
+        volRatio5: normalizeFactorValue(factorsResp.factors.volRatio5),
+        amplitude: normalizeFactorValue(factorsResp.factors.amplitude),
       }
     }
   }
@@ -102,7 +93,7 @@ export async function fetchMarketBundle(stockCode: string, days: number): Promis
   return {
     data: buildModel(stockCode, bars, quote, intradaySeed, bars.length > 0 ? factors : defaultFactors()),
     dataSource: source,
-    missingApis,
+    missingApis: [],
     warnings,
   }
 }

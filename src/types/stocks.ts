@@ -3,6 +3,7 @@ export interface QuoteResponse {
   stockCode: string
   stockName: string
   currentPrice: number
+  source?: string
   change?: number | null
   changePercent?: number | null
   open?: number | null
@@ -29,6 +30,7 @@ export interface StockHistoryResponse {
   stockCode: string
   stockName: string
   period: 'daily'
+  source?: string
   data: StockHistoryPoint[]
 }
 

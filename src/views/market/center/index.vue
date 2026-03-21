@@ -5,7 +5,7 @@ import { BREAKPOINT_SPAN, CARD_DENSITY, CHART_HEIGHT, DASHBOARD_LAYOUT, GRID_GAP
 import { trendValueStyle } from '@/constants/semantic-ui'
 import type { FactorSnapshot, IntradayPoint } from '@/types/market-analytics'
 import { fetchMarketBundle, fetchQuoteOnly } from '@/services/market-service'
-import { formatDateTime, validateStockCode } from '@/utils/stock'
+import { formatDateTime, validateAShareMarketCode } from '@/utils/stock'
 import type { CSSProperties } from 'vue'
 
 // 行情中心 = 全量行情加载 + 分时轮询刷新，两套数据源最终汇总到同一块看板里。
@@ -93,7 +93,17 @@ const sourceType = computed<'success' | 'warning' | 'error'>(() => {
   return 'error'
 })
 
+const marketSourceLabelMap: Record<string, string> = {
+  tencent: '腾讯行情',
+  sina: '新浪行情',
+  efinance: 'EFinance',
+  eastmoney: '东方财富',
+  tushare: 'Tushare',
+}
+
 const sourceText = computed(() => {
+  if (sourceTag.value === 'api' && quote.value?.source)
+    return `${marketSourceLabelMap[quote.value.source] || quote.value.source} / 真实接口数据`
   if (sourceTag.value === 'api')
     return '真实接口数据'
   if (sourceTag.value === 'derived')
@@ -268,7 +278,7 @@ function rebuildIntraday() {
 }
 
 async function refreshQuoteOnly() {
-  const normalized = validateStockCode(stockCode.value)
+  const normalized = validateAShareMarketCode(stockCode.value)
   if (!normalized.valid)
     return
 
@@ -287,7 +297,7 @@ async function refreshQuoteOnly() {
 }
 
 async function loadMarket() {
-  const normalized = validateStockCode(stockCode.value)
+  const normalized = validateAShareMarketCode(stockCode.value)
   if (!normalized.valid) {
     window.$message.error(normalized.message || '股票代码不合法')
     return
@@ -372,7 +382,7 @@ onUnmounted(() => {
         </n-text>
         <n-grid :cols="24" :x-gap="GRID_GAP.inner" :y-gap="GRID_GAP.inner" responsive="screen">
           <n-grid-item :span="24" :m-span="8" :l-span="6">
-            <n-input v-model:value="stockCode" clearable placeholder="股票代码" />
+            <n-input v-model:value="stockCode" clearable placeholder="A股代码（如 600519 / SH600519）" />
           </n-grid-item>
           <n-grid-item :span="24" :m-span="8" :l-span="6">
             <n-input-number v-model:value="days" :min="10" :max="365" :step="10">

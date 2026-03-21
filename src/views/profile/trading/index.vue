@@ -1,17 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, shallowRef, useTemplateRef, watch } from 'vue'
+import { computed, onMounted, reactive, shallowRef, watch } from 'vue'
 import { addTradingFunds } from '@/api/trading-account'
 import { DASHBOARD_LAYOUT, SPACING } from '@/constants/design-tokens'
 import { useBrokerAccountStore, useTradingAccountStore } from '@/store'
-import TradingAccountActionsCard from './components/TradingAccountActionsCard.vue'
 import TradingAccountActivityCard from './components/TradingAccountActivityCard.vue'
 import TradingAccountDetailTabs from './components/TradingAccountDetailTabs.vue'
 import TradingAccountFundingCard from './components/TradingAccountFundingCard.vue'
 import TradingAccountHeroCard from './components/TradingAccountHeroCard.vue'
 import TradingAccountKpiCard from './components/TradingAccountKpiCard.vue'
-import TradingAccountMetaCard from './components/TradingAccountMetaCard.vue'
 import TradingAccountSetupCard from './components/TradingAccountSetupCard.vue'
-import TradingAccountSummaryCard from './components/TradingAccountSummaryCard.vue'
 import { useTradingAccountCenterViewModel } from './composables/useTradingAccountCenterViewModel'
 import type { TradingAddFundsFormModel, TradingBindFormModel } from './types'
 
@@ -19,7 +16,6 @@ import type { TradingAddFundsFormModel, TradingBindFormModel } from './types'
 const brokerAccountStore = useBrokerAccountStore()
 const tradingAccountStore = useTradingAccountStore()
 
-const forcingRefresh = shallowRef(false)
 const binding = shallowRef(false)
 const funding = shallowRef(false)
 const failedWithHistoricalAccountUid = shallowRef(false)
@@ -37,9 +33,6 @@ const addFundsForm = reactive<TradingAddFundsFormModel>({
   note: '',
 })
 
-const setupSection = useTemplateRef<HTMLElement>('setupSection')
-const fundingSection = useTemplateRef<HTMLElement>('fundingSection')
-
 const bindInlineError = computed(() => brokerAccountStore.bindError || brokerAccountStore.error)
 
 const {
@@ -47,12 +40,8 @@ const {
   canLoadTradingData,
   accountStateLabel,
   accountStateType,
-  stateDescription,
   heroCard,
-  metaItems,
   kpiCards,
-  summaryCounts,
-  summaryRatios,
   fundingReference,
   recentOrders,
   recentTrades,
@@ -86,13 +75,6 @@ function validateAddFundsForm(): string | null {
   if (!Number.isFinite(addFundsForm.amount) || Number(addFundsForm.amount) <= 0)
     return '增加资金金额必须大于 0'
   return null
-}
-
-function scrollToSection(target?: HTMLElement | null) {
-  target?.scrollIntoView({
-    behavior: 'smooth',
-    block: 'start',
-  })
 }
 
 function syncBindFormFromStatus() {
@@ -144,18 +126,6 @@ async function loadStatusAndData(silent = false): Promise<void> {
   if (!ok)
     return
   await refreshTradingData(false, silent)
-}
-
-async function refreshStatusNow() {
-  const ok = await loadSimulationStatus()
-  if (!ok)
-    return
-  if (canLoadTradingData.value && !tradingAccountStore.hasData)
-    await refreshTradingData(false, true)
-}
-
-async function refreshSnapshotNow() {
-  await refreshTradingData(forcingRefresh.value)
 }
 
 async function bindSimulationAccountNow() {
@@ -235,33 +205,11 @@ watch(() => addFundsForm.amount, (value) => {
 
 <template>
   <n-space vertical :size="SPACING.lg">
-    <!-- 首屏先展示账户身份和快捷操作，便于判断当前模拟盘是否可用。 -->
     <n-grid :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.outerGap" :y-gap="DASHBOARD_LAYOUT.outerGap" responsive="screen">
-      <n-grid-item :span="24" :l-span="12">
+      <n-grid-item :span="24">
         <TradingAccountHeroCard
           :hero="heroCard"
           :error="brokerAccountStore.simulationStatusLoadFailed ? brokerAccountStore.simulationStatusError : ''"
-        />
-      </n-grid-item>
-
-      <n-grid-item :span="24" :m-span="12" :l-span="6">
-        <TradingAccountMetaCard :items="metaItems" />
-      </n-grid-item>
-
-      <n-grid-item :span="24" :m-span="12" :l-span="6">
-        <TradingAccountActionsCard
-          v-model:forcing-refresh="forcingRefresh"
-          :status-label="accountStateLabel"
-          :status-type="accountStateType"
-          :status-description="stateDescription"
-          :status-loading="brokerAccountStore.loading"
-          :data-loading="tradingAccountStore.loadingOverview || tradingAccountStore.loadingDetails"
-          :can-load-trading-data="canLoadTradingData"
-          :data-error="tradingAccountStore.overviewError"
-          @refresh-status="refreshStatusNow"
-          @refresh-data="refreshSnapshotNow"
-          @scroll-setup="scrollToSection(setupSection)"
-          @scroll-funding="scrollToSection(fundingSection)"
         />
       </n-grid-item>
     </n-grid>
@@ -280,47 +228,33 @@ watch(() => addFundsForm.amount, (value) => {
     <n-grid :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.outerGap" :y-gap="DASHBOARD_LAYOUT.outerGap" responsive="screen">
       <n-grid-item :span="24" :l-span="14">
         <!-- 左侧承载初始化和入金，是主要操作区。 -->
-        <div ref="setupSection">
-          <TradingAccountSetupCard
-            v-model:form="bindForm"
-            :status-label="accountStateLabel"
-            :status-type="accountStateType"
-            :inline-error="bindInlineError"
-            :historical-uid-warning="failedWithHistoricalAccountUid"
-            :loading="binding || brokerAccountStore.submitting"
-            @clear-account-uid="clearAccountUidInput"
-            @submit="bindSimulationAccountNow"
-          />
-        </div>
+        <TradingAccountSetupCard
+          v-model:form="bindForm"
+          :status-label="accountStateLabel"
+          :status-type="accountStateType"
+          :inline-error="bindInlineError"
+          :historical-uid-warning="failedWithHistoricalAccountUid"
+          :loading="binding || brokerAccountStore.submitting"
+          @clear-account-uid="clearAccountUidInput"
+          @submit="bindSimulationAccountNow"
+        />
       </n-grid-item>
 
       <n-grid-item :span="24" :l-span="10">
         <!-- 右侧承载入金卡片，与初始化卡相邻方便连续操作。 -->
-        <div ref="fundingSection">
-          <TradingAccountFundingCard
-            v-model:form="addFundsForm"
-            :enabled="canLoadTradingData"
-            :cash-text="fundingReference.cashText"
-            :total-asset-text="fundingReference.totalAssetText"
-            :loading="funding"
-            @submit="addFundsNow"
-          />
-        </div>
+        <TradingAccountFundingCard
+          v-model:form="addFundsForm"
+          :enabled="canLoadTradingData"
+          :cash-text="fundingReference.cashText"
+          :total-asset-text="fundingReference.totalAssetText"
+          :loading="funding"
+          @submit="addFundsNow"
+        />
       </n-grid-item>
     </n-grid>
 
     <n-grid :cols="DASHBOARD_LAYOUT.cols" :x-gap="DASHBOARD_LAYOUT.outerGap" :y-gap="DASHBOARD_LAYOUT.outerGap" responsive="screen">
-      <!-- 下半区集中展示摘要、最近委托和最近成交，方便绑定后立即验收快照。 -->
-      <n-grid-item :span="24" :l-span="8">
-        <TradingAccountSummaryCard
-          :ready="canLoadTradingData"
-          :loading="tradingAccountStore.loadingOverview || tradingAccountStore.loadingDetails"
-          :count-items="summaryCounts"
-          :ratio-items="summaryRatios"
-        />
-      </n-grid-item>
-
-      <n-grid-item :span="24" :l-span="8">
+      <n-grid-item :span="24" :l-span="12">
         <TradingAccountActivityCard
           title="最近委托"
           count-type="info"
@@ -330,7 +264,7 @@ watch(() => addFundsForm.amount, (value) => {
         />
       </n-grid-item>
 
-      <n-grid-item :span="24" :l-span="8">
+      <n-grid-item :span="24" :l-span="12">
         <TradingAccountActivityCard
           title="最近成交"
           count-type="success"

@@ -1,106 +1,149 @@
 <script setup lang="ts">
-// 调度任务详情抽屉负责展示任务详情、阶段信息和上下文载荷。
-import AgentStagePanel from '@/components/analysis/AgentStagePanel.vue'
-import type { AgentStageItem } from '@/types/agent-stages'
-import type { SchedulerDetailView } from '@/types/analysis-scheduler-view'
+import type { AnalysisScheduleDetail, AnalysisScheduleLastTaskStatus, AnalysisScheduleRunItem } from '@/types/analysis-scheduler'
+import { formatDateTime } from '@/utils/stock'
 
 const props = defineProps<{
   loading: boolean
-  detail: SchedulerDetailView | null
-  stages: AgentStageItem[]
-  stageWarning: string
+  detail: AnalysisScheduleDetail | null
 }>()
 
 const show = defineModel<boolean>('show', { required: true })
 
-const activeTab = ref<'summary' | 'chain' | 'stages' | 'payload'>('summary')
+function statusLabel(status: AnalysisScheduleLastTaskStatus | AnalysisScheduleRunItem['status']): string {
+  if (status === 'pending')
+    return '排队中'
+  if (status === 'processing')
+    return '执行中'
+  if (status === 'completed')
+    return '已完成'
+  if (status === 'failed')
+    return '失败'
+  if (status === 'cancelled')
+    return '已取消'
+  if (status === 'skipped')
+    return '已跳过'
+  return '未触发'
+}
 
-watch(() => [show.value, props.detail?.detail.task.taskId], ([visible]) => {
-  if (visible)
-    activeTab.value = 'summary'
-}, { immediate: true })
+function statusType(status: AnalysisScheduleLastTaskStatus | AnalysisScheduleRunItem['status']): 'default' | 'info' | 'success' | 'warning' | 'error' {
+  if (status === 'processing')
+    return 'info'
+  if (status === 'completed')
+    return 'success'
+  if (status === 'failed')
+    return 'error'
+  if (status === 'pending' || status === 'skipped')
+    return 'warning'
+  return 'default'
+}
 </script>
 
 <template>
-  <n-drawer v-model:show="show" :width="960">
-    <n-drawer-content :title="props.detail?.title || '调度任务详情'" closable>
-      <n-spin :show="props.loading">
-        <n-empty v-if="!props.detail && !props.loading" description="暂无任务详情" />
+  <n-drawer v-model:show="show" width="540" placement="right">
+    <n-drawer-content title="定时任务详情" closable>
+      <n-spin :show="loading">
+        <n-space v-if="detail" vertical :size="20">
+          <n-card size="small" :bordered="false">
+            <n-space vertical :size="14">
+              <n-flex justify="space-between" align="center">
+                <n-space align="center" :size="8">
+                  <n-text strong style="font-size: 18px;">
+                    {{ detail.schedule.stockCode }}
+                  </n-text>
+                  <n-tag round :type="detail.schedule.enabled ? 'success' : 'default'" size="small">
+                    {{ detail.schedule.enabled ? '启用中' : '已暂停' }}
+                  </n-tag>
+                </n-space>
 
-        <n-tabs v-else-if="props.detail" v-model:value="activeTab" type="line" animated>
-          <n-tab-pane name="summary" tab="摘要">
-            <n-space vertical :size="16">
-              <n-alert type="info" :show-icon="false">
-                {{ props.detail.summary }}
-              </n-alert>
-
-              <n-space :size="8" :wrap="true">
-                <n-tag round size="small" :type="props.detail.headerTag.type">
-                  {{ props.detail.headerTag.label }}
+                <n-tag round :type="statusType(detail.schedule.lastTaskStatus)" size="small">
+                  {{ statusLabel(detail.schedule.lastTaskStatus) }}
                 </n-tag>
-                <n-tag v-for="tag in props.detail.tags.slice(1)" :key="tag.key" round size="small" :type="tag.type">
-                  {{ tag.label }}
-                </n-tag>
-              </n-space>
+              </n-flex>
 
-              <n-progress
-                v-if="props.detail.progress != null"
-                type="line"
-                :percentage="props.detail.progress"
-                indicator-placement="inside"
-                processing
-              />
-
-              <n-descriptions bordered label-placement="top" size="small" :column="2">
-                <n-descriptions-item v-for="item in props.detail.fields" :key="item.key" :label="item.label">
-                  <n-ellipsis :tooltip="true">
-                    {{ item.value }}
-                  </n-ellipsis>
+              <n-descriptions label-placement="left" bordered :column="1" size="small">
+                <n-descriptions-item label="执行周期">
+                  {{ detail.schedule.intervalMinutes }} 分钟
+                </n-descriptions-item>
+                <n-descriptions-item label="分析模式">
+                  {{ detail.schedule.executionMode === 'auto' ? 'Auto' : 'Paper' }}
+                </n-descriptions-item>
+                <n-descriptions-item label="下次执行">
+                  {{ formatDateTime(detail.schedule.nextRunAt) }}
+                </n-descriptions-item>
+                <n-descriptions-item label="最近触发">
+                  {{ formatDateTime(detail.schedule.lastTriggeredAt) }}
+                </n-descriptions-item>
+                <n-descriptions-item label="最近完成">
+                  {{ formatDateTime(detail.schedule.lastCompletedAt) }}
+                </n-descriptions-item>
+                <n-descriptions-item label="最近消息">
+                  {{ detail.schedule.lastTaskMessage || '--' }}
                 </n-descriptions-item>
               </n-descriptions>
             </n-space>
-          </n-tab-pane>
+          </n-card>
 
-          <n-tab-pane name="chain" tab="任务链路">
-            <n-timeline>
-              <n-timeline-item
-                v-for="item in props.detail.chainItems"
-                :key="item.key"
-                :type="item.type"
-                :title="item.title"
-                :content="item.content"
-                :time="item.time"
-              />
-            </n-timeline>
-          </n-tab-pane>
+          <n-card size="small" :bordered="false" title="最近 10 次执行记录">
+            <n-empty v-if="detail.recentRuns.length === 0" description="暂无执行记录" />
 
-          <n-tab-pane name="stages" tab="阶段详情">
-            <n-space vertical :size="16">
-              <n-alert v-if="props.stageWarning" type="warning" :show-icon="false">
-                {{ props.stageWarning }}
-              </n-alert>
-              <AgentStagePanel :stages="props.stages" />
-            </n-space>
-          </n-tab-pane>
-
-          <n-tab-pane name="payload" tab="载荷快照">
-            <n-grid cols="1 l:2" responsive="screen" :x-gap="12" :y-gap="12">
-              <n-grid-item v-for="item in props.detail.payloadCards" :key="item.key">
-                <n-card embedded size="small" :bordered="false">
-                  <n-space vertical :size="10">
+            <n-space v-else vertical :size="12">
+              <div v-for="item in detail.recentRuns" :key="item.taskId" class="schedule-run-card">
+                <n-flex justify="space-between" align="center" :wrap="true">
+                  <n-space align="center" :size="8">
                     <n-text strong>
-                      {{ item.title }}
+                      {{ item.taskId }}
                     </n-text>
-                    <n-code word-wrap>
-                      {{ item.value }}
-                    </n-code>
+                    <n-tag size="small" round :type="statusType(item.status)">
+                      {{ statusLabel(item.status) }}
+                    </n-tag>
                   </n-space>
-                </n-card>
-              </n-grid-item>
-            </n-grid>
-          </n-tab-pane>
-        </n-tabs>
+
+                  <n-text depth="3">
+                    {{ formatDateTime(item.createdAt) }}
+                  </n-text>
+                </n-flex>
+
+                <n-space class="schedule-run-card__meta" :size="10" :wrap="true">
+                  <n-tag size="small" round>
+                    第 {{ item.attemptNo }} 次
+                  </n-tag>
+                  <n-tag size="small" round>
+                    {{ item.executionMode === 'broker' ? 'Broker' : 'Paper' }}
+                  </n-tag>
+                  <n-tag size="small" round>
+                    进度 {{ item.progress }}%
+                  </n-tag>
+                </n-space>
+
+                <div class="schedule-run-card__message">
+                  {{ item.message || item.error || '--' }}
+                </div>
+              </div>
+            </n-space>
+          </n-card>
+        </n-space>
+
+        <n-empty v-else description="请选择一条定时任务查看详情" />
       </n-spin>
     </n-drawer-content>
   </n-drawer>
 </template>
+
+<style scoped>
+.schedule-run-card {
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.03);
+}
+
+.schedule-run-card__meta {
+  margin-top: 10px;
+}
+
+.schedule-run-card__message {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--n-text-color-2);
+}
+</style>

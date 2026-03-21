@@ -1,125 +1,124 @@
-<div align="center">
-<img src="https://s2.loli.net/2023/10/27/WzQ4JLNV5epKh6X.png" style="width:150px"/>
-    <h1>Nova Admin</h1>
-</div>
+# Frontend_stock
 
-<div align="center">
-    <img src="https://img.shields.io/github/license/chansee97/nova-admin"/>
-    <img src="https://badgen.net/github/stars/chansee97/nova-admin?icon=github"/>
-    <img src="https://gitee.com/chansee97/nova-admin/badge/star.svg"/>
-    <img src="https://img.shields.io/github/forks/chansee97/nova-admin"/>
-</div>
+`Frontend_stock` 是“AI 驱动的股票智能分析与模拟交易平台”的前端管理台，负责承载 AI 分析、任务调度、行情展示、策略回测、交易账户管理、个人配置与后台管理等核心界面能力。
 
-<div align='center'>
+它与 [Backend_stock](https://github.com/HOAONI/Backend_stock) 和 [Agent_stock](https://github.com/HOAONI/Agent_stock) 协同工作，组成完整的股票智能分析与模拟交易系统。
 
-  English |  [中文](./README.zh-CN.md)
-</div>
+## 核心能力
 
-## Introduction
+- AI 分析中心：提交分析任务、查看执行状态、失败详情、历史记录与报告摘要
+- 调度中心：展示任务队列、运行态信息、调度状态与异步执行链路
+- 行情与策略展示：查看股票、市场信息和策略相关数据
+- 回测与统计：触发策略回测，查看收益、持仓、订单、成交与 AI 解读
+- 个人配置与交易账户中心：维护模拟盘、账户参数和个人偏好
+- 后台管理：管理员可维护全局行情源、用户与日志
 
-[Nova-admin](https://github.com/chansee97/nova-admin) is a clean and concise back-end management template based on Vue3, Vite5, Typescript, and Naive UI. It implements complete functionality in a simple way, while also considering code standards, readability, and avoiding excessive encapsulation to facilitate secondary development.
+## 技术栈
 
-- [Nova-Admin preview](https://nova-admin.pages.dev/)
-- [Nova-Admin docs](https://nova-admin-docs.pages.dev/)
+- `Vue 3`
+- `TypeScript`
+- `Vite`
+- `Pinia`
+- `Vue Router`
+- `Naive UI`
+- `UnoCSS`
+- `ECharts`
+- `Axios`
 
-## Features
+## 页面与模块
 
-- Developed based on the latest technology stack including Vue3, Vite6, TypeScript, NaiveUI, Unocss, etc.
-- Based on [alova](https://alova.js.org/) encapsulation and configuration, providing unified response handling and multi-scenario capabilities.
-- Comprehensive front-end and back-end permission management solution.
-- Supports local static routes and dynamically generated routes from the back end, with easy route configuration.
-- Secondary encapsulation of commonly used components to meet basic work requirements.
-- Dark theme adaptation, maintaining the Naive style for interface aesthetics.
-- Only performs eslint validation during submission without excessive restrictions for simpler development.
-- Flexible and configurable interface layout based on [pro-naive-ui](https://github.com/Zheng-Changfu/pro-naive-ui)
-- Multilanguage (i18n) support.
+当前前端主要页面和菜单包括：
 
-## Project preview
+- 首页
+- AI 分析与调度
+- 分析中心
+- 调度中心
+- 行情与策略展示
+- 回测与统计
+- 个人配置
+- 交易账户中心
+- 后台管理（配置管理 / 全局行情源、用户管理、日志管理）
 
-![preview-1.png](https://s2.loli.net/2024/03/31/UZoajnEekMX9cLi.png)
-![preview-2.jpg](https://s2.loli.net/2024/03/31/8VwMSyXWtO6avKg.jpg)
-![preview-5.png](https://s2.loli.net/2024/03/31/TCtE2ZBU7MJ6HrY.png)
-![preview-6.png](https://s2.loli.net/2024/03/31/YM1OrxZCimzLcd6.png)
-![preview-4.png](https://s2.loli.net/2024/03/31/hgYHKjACqs7rcPV.png)
-![preview-3.png](https://s2.loli.net/2024/03/31/TuYajAH9LWsMPf5.png)
+接口层按业务拆分在 `src/api` 中，当前已覆盖分析、调度、回测、股票、交易账户、全局行情源、管理员日志与用户管理等模块。
 
-## Repo
+## 关联服务
 
-- [Gitee](https://gitee.com/chansee97/nova-admin)
-- [Github](https://github.com/chansee97/nova-admin)
+- Frontend: `http://127.0.0.1:5173`
+- Backend: `http://127.0.0.1:8002`
+- Agent: `http://127.0.0.1:8001`
 
-## Interface document
+前端默认通过 Vite 代理或显式 API 地址连接后端服务，完整系统需要与后端和 Agent 服务一起运行。
 
-This project uses ApiFox for interface mock, check the online documentation for more interface details
-[online aipfox docs](https://nova-admin.apifox.cn)
+## 本地开发
 
-## Install and use
+### 依赖要求
 
-The local development environment is recommended to use pnpm 10.x, Node.js version 21.x.
-If you use `pnpm start` for background startup, make sure `python3` is available locally.
+- `Node.js 22+`
+- `pnpm`
 
-It is recommended to directly download the compressed package from [Releases](https://github.com/chansee97/nova-admin/releases)
+### 安装依赖
 
 ```bash
-# install dependencies
-pnpm i
+pnpm install
+```
 
-# Run in foreground
+### 环境变量
+
+仓库不会再提交实际环境文件，启动前请自行准备本地 `.env` 配置。前端会读取以下变量：
+
+```bash
+VITE_APP_NAME=股票智能分析与模拟交易平台
+VITE_BASE_URL=/
+VITE_ROUTE_MODE=hash
+VITE_HOME_PATH=/home
+VITE_COPYRIGHT_INFO=AI 驱动的股票智能分析与模拟交易平台
+VITE_API_BASE_URL=http://127.0.0.1:8002/
+VITE_API_TIMEOUT=30000
+VITE_DATA_MODE=api
+VITE_ENABLE_MOCK_BADGE=false
+VITE_PROXY_TARGET=http://127.0.0.1:8002
+VITE_BACKTEST_RUN_TIMEOUT=150000
+```
+
+### 启动开发服务
+
+```bash
 pnpm dev
+```
 
-# Start or stop the local frontend in background
+默认访问地址：
+
+```text
+http://127.0.0.1:5173
+```
+
+## 常用命令
+
+```bash
+pnpm dev
+pnpm build
+pnpm typecheck
+pnpm lint
+pnpm preview
 pnpm start
 pnpm stop
-
-# Build product
-pnpm build
-
 ```
 
-You can deploy **nova-admin** in a production environment using docker-compose.
-```bash
-# Build product
-docker compose -f docker-compose.product.yml up --build -d
-```
-> The nginx.conf provided is for reference only. You can adjust it according to your own needs.
+其中：
 
-## Related projects
+- `pnpm dev`：启动 Vite 开发环境
+- `pnpm build`：构建生产包
+- `pnpm typecheck`：执行 Vue/TypeScript 类型检查
+- `pnpm lint`：执行 ESLint 和类型检查
+- `pnpm start` / `pnpm stop`：使用仓库内脚本启动或停止前端进程
 
-- [Nova-admin-nest](https://github.com/chansee97/nova-admin-nest) (under development) Nova-Admin supporting background project based on TS, NestJs, typeorm
+## 全链路运行说明
 
-## Learn to communicate
+如果你要在本地联调完整系统，可在项目根目录参考统一启动文档和脚本：
 
-Nova-Admin is a completely open-source and free project. It is still being optimized and iterated. It is designed to help developers more conveniently develop medium and large management systems. If you have any questions, please ask questions in the QQ exchange group.
-
-| Q-Group | wechat-Group |
-| :--: |:--: |
-| <img src="https://cdn.jsdelivr.net/gh/chansee97/static/nova-admin/q-group.png" width=170> |<img src="https://cdn.jsdelivr.net/gh/chansee97/static/wechat.png" width=170>|
-
-> Please indicate the purpose of adding WeChat.
-
-## Contribution
-
-If you find any issues or have suggestions for improvement, please create an [issue](nova-admin/issues/new) or submit a PR. We welcome your contributions!
-
-## Support
-
-If you feel that this project is helpful for your work or study, please help me order a ✨ Star, which will be a great encouragement and support for me, or you can buy me a cup of coffee below
-
-| wechat | alipay |
-| :--: |:--: |
-| <img src="https://cdn.jsdelivr.net/gh/chansee97/static/sponsor-wechat.png" width=170> | <img src="https://cdn.jsdelivr.net/gh/chansee97/static/sponsor-alipay.png" width=170>|
-
-## Contributors
-
-Thanks for all their contributions!
-
-<a href="https://github.com/chansee97/nova-admin/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=chansee97/nova-admin" alt="contributors" />
-</a>
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=chansee97/nova-admin&type=Date)](https://star-history.com/#chansee97/nova-admin&Date)
+- 根目录文档：`docs/RUN_BACKTRADER_LOCAL.md`
+- 一键启动：`bash scripts/system/start.sh`
+- 一键停止：`bash scripts/system/stop.sh`
 
 ## License
 
