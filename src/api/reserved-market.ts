@@ -8,6 +8,8 @@ export interface ReservedIndicatorsResponse {
   days: number
   windows: number[]
   source?: string
+  requestedSource?: string
+  warning?: string
   items: Array<{
     date: string
     close: number
@@ -19,6 +21,8 @@ export interface ReservedFactorsResponse {
   stockCode: string
   date: string
   source?: string
+  requestedSource?: string
+  warning?: string
   factors: Record<string, number | string | null>
 }
 

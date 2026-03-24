@@ -64,18 +64,24 @@ pnpm install
 
 ### 环境变量
 
-仓库不会再提交实际环境文件，启动前请自行准备本地 `.env` 配置。前端会读取以下变量：
+推荐先复制模板：
+
+```bash
+cp .env.example .env
+```
+
+前端会读取以下变量：
 
 ```bash
 VITE_APP_NAME=股票智能分析与模拟交易平台
 VITE_BASE_URL=/
-VITE_ROUTE_MODE=hash
+VITE_ROUTE_MODE=web
 VITE_HOME_PATH=/home
-VITE_COPYRIGHT_INFO=AI 驱动的股票智能分析与模拟交易平台
-VITE_API_BASE_URL=http://127.0.0.1:8002/
+VITE_COPYRIGHT_INFO=
+VITE_API_BASE_URL=/
 VITE_API_TIMEOUT=30000
-VITE_DATA_MODE=api
-VITE_ENABLE_MOCK_BADGE=false
+VITE_DATA_MODE=hybrid
+VITE_ENABLE_MOCK_BADGE=true
 VITE_PROXY_TARGET=http://127.0.0.1:8002
 VITE_BACKTEST_RUN_TIMEOUT=150000
 ```
@@ -114,11 +120,11 @@ pnpm stop
 
 ## 全链路运行说明
 
-如果你要在本地联调完整系统，可在项目根目录参考统一启动文档和脚本：
+如果你是在一台空白机器上把 `Frontend_stock`、`Backend_stock`、`Agent_stock` 三个仓库克隆到同一父目录后做联调，请直接参考：
 
-- 根目录文档：`docs/RUN_BACKTRADER_LOCAL.md`
-- 一键启动：`bash scripts/system/start.sh`
-- 一键停止：`bash scripts/system/stop.sh`
+- [StockSystemHub 主安装文档](https://github.com/HOAONI/StockSystemHub/blob/main/INSTALL_FULL_STACK_FROM_SCRATCH.md)
+
+只有当你自己额外维护了一个带根目录聚合脚本的工作区时，才需要使用工作区根目录的 `scripts/system/*.sh`。
 
 ## License
 

@@ -22,6 +22,12 @@ export interface IntradayPoint {
   price: number
 }
 
+export interface MarketSourceMeta {
+  source: string | null
+  requestedSource: string | null
+  warning: string | null
+}
+
 export interface MarketViewModel {
   stockCode: string
   quote: QuoteResponse | null
@@ -34,4 +40,6 @@ export interface MarketViewModel {
     ma60: MaSeriesPoint[]
   }
   factors: FactorSnapshot
+  historySourceMeta: MarketSourceMeta
+  historyError: string | null
 }

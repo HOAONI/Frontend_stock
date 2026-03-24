@@ -3,7 +3,8 @@ import { useEcharts } from '@/hooks/useEcharts'
 import type { ECOption } from '@/hooks/useEcharts'
 import { BREAKPOINT_SPAN, CARD_DENSITY, CHART_HEIGHT, DASHBOARD_LAYOUT, GRID_GAP, SPACING } from '@/constants/design-tokens'
 import { trendValueStyle } from '@/constants/semantic-ui'
-import type { FactorSnapshot, IntradayPoint } from '@/types/market-analytics'
+import type { FactorSnapshot, IntradayPoint, MarketSourceMeta } from '@/types/market-analytics'
+import type { StockHistoryPoint } from '@/types/stocks'
 import { fetchMarketBundle, fetchQuoteOnly } from '@/services/market-service'
 import { formatDateTime, validateAShareMarketCode } from '@/utils/stock'
 import type { CSSProperties } from 'vue'
@@ -16,7 +17,7 @@ const autoRefresh = ref(true)
 const isMobile = useMediaQuery('(max-width: 1024px)')
 
 const quote = ref<Awaited<ReturnType<typeof fetchQuoteOnly>>['data']['quote']>(null)
-const bars = ref<Array<{ date: string, open: number, close: number, low: number, high: number }>>([])
+const bars = ref<StockHistoryPoint[]>([])
 const intraday = ref<IntradayPoint[]>([])
 
 const factors = ref<FactorSnapshot>({
@@ -33,6 +34,12 @@ const factors = ref<FactorSnapshot>({
 const sourceTag = ref<'api' | 'mock' | 'derived'>('api')
 const missingApis = ref<string[]>([])
 const warnings = ref<string[]>([])
+const historySourceMeta = ref<MarketSourceMeta>({
+  source: null,
+  requestedSource: null,
+  warning: null,
+})
+const historyError = ref<string | null>(null)
 
 const klineOptions = ref<ECOption>({})
 const intradayOptions = ref<ECOption>({})
@@ -66,6 +73,10 @@ function clearIntraday() {
   rebuildIntraday()
 }
 
+function clearKline() {
+  klineOptions.value = {}
+}
+
 function toFactorText(value: number | null, suffix = '', digits = 2): string {
   if (value == null || Number.isNaN(value))
     return '--'
@@ -85,14 +96,6 @@ const factorCards = computed(() => {
   ]
 })
 
-const sourceType = computed<'success' | 'warning' | 'error'>(() => {
-  if (sourceTag.value === 'api')
-    return 'success'
-  if (sourceTag.value === 'derived')
-    return 'warning'
-  return 'error'
-})
-
 const marketSourceLabelMap: Record<string, string> = {
   tencent: '腾讯行情',
   sina: '新浪行情',
@@ -101,14 +104,104 @@ const marketSourceLabelMap: Record<string, string> = {
   tushare: 'Tushare',
 }
 
+function marketSourceLabel(source: string | null | undefined): string {
+  const normalized = String(source || '').trim()
+  return marketSourceLabelMap[normalized] || normalized || '--'
+}
+
+function isRealtimeWarning(text: string): boolean {
+  return String(text || '').startsWith('实时行情')
+}
+
+function syncRealtimeWarnings(nextWarnings: string[]) {
+  const preserved = warnings.value.filter(item => !isRealtimeWarning(item))
+  warnings.value = [...preserved]
+  for (const item of nextWarnings) {
+    if (!warnings.value.includes(item))
+      warnings.value.push(item)
+  }
+}
+
+const historyRequestedSourceText = computed(() => {
+  const currentHistory = historySourceMeta.value
+  if (!currentHistory.requestedSource || currentHistory.requestedSource === currentHistory.source)
+    return null
+  return marketSourceLabel(currentHistory.requestedSource)
+})
+
+const historyActualSourceText = computed(() => {
+  const currentHistory = historySourceMeta.value
+  if (!currentHistory.source)
+    return null
+  return marketSourceLabel(currentHistory.source)
+})
+
+const historySourceText = computed(() => {
+  if (historyError.value)
+    return '历史日线暂不可用'
+  const currentHistory = historySourceMeta.value
+  if (currentHistory.source)
+    return marketSourceLabel(currentHistory.source)
+  if (bars.value.length > 0)
+    return '真实接口数据'
+  return '暂无历史日线数据'
+})
+
+const sourceType = computed<'success' | 'warning' | 'error'>(() => {
+  if (historyError.value)
+    return quote.value ? 'warning' : 'error'
+  if (warnings.value.length > 0 || missingApis.value.length > 0)
+    return 'warning'
+  const currentHistory = historySourceMeta.value
+  const currentQuote = quote.value
+  if (sourceTag.value === 'api' && currentHistory.requestedSource && currentHistory.requestedSource !== currentHistory.source)
+    return 'warning'
+  if (sourceTag.value === 'api' && currentQuote?.requestedSource && currentQuote.requestedSource !== currentQuote.source)
+    return 'warning'
+  if (sourceTag.value === 'api')
+    return 'success'
+  if (sourceTag.value === 'derived')
+    return 'warning'
+  return 'error'
+})
+
 const sourceText = computed(() => {
-  if (sourceTag.value === 'api' && quote.value?.source)
-    return `${marketSourceLabelMap[quote.value.source] || quote.value.source} / 真实接口数据`
+  const currentHistory = historySourceMeta.value
+  const currentQuote = quote.value
+  if (historyError.value) {
+    if (currentQuote?.source)
+      return `实时 ${marketSourceLabel(currentQuote.source)} / 历史日线暂不可用`
+    return '历史日线暂不可用'
+  }
+  if (currentHistory.source) {
+    if (currentHistory.requestedSource && currentHistory.requestedSource !== currentHistory.source)
+      return `${marketSourceLabel(currentHistory.requestedSource)} 已降级至 ${marketSourceLabel(currentHistory.source)} / 日线接口数据`
+    return `${marketSourceLabel(currentHistory.source)} / 日线接口数据`
+  }
+  if (sourceTag.value === 'api' && currentQuote?.source) {
+    if (currentQuote.requestedSource && currentQuote.requestedSource !== currentQuote.source)
+      return `${marketSourceLabel(currentQuote.requestedSource)} 已降级至 ${marketSourceLabel(currentQuote.source)} / 真实接口数据`
+    return `${marketSourceLabel(currentQuote.source)} / 真实接口数据`
+  }
   if (sourceTag.value === 'api')
     return '真实接口数据'
   if (sourceTag.value === 'derived')
     return '派生数据'
   return '模拟数据'
+})
+
+const requestedSourceText = computed(() => {
+  const currentQuote = quote.value
+  if (!currentQuote?.requestedSource || currentQuote.requestedSource === currentQuote.source)
+    return null
+  return marketSourceLabel(currentQuote.requestedSource)
+})
+
+const actualSourceText = computed(() => {
+  const currentQuote = quote.value
+  if (!currentQuote?.source)
+    return null
+  return marketSourceLabel(currentQuote.source)
 })
 
 interface MarketKpiCard {
@@ -285,6 +378,7 @@ async function refreshQuoteOnly() {
   try {
     const result = await fetchQuoteOnly(normalized.normalized)
     sourceTag.value = result.dataSource
+    syncRealtimeWarnings(result.warnings)
     if (result.data.quote)
       quote.value = result.data.quote
     if (result.data.point)
@@ -306,6 +400,12 @@ async function loadMarket() {
   loading.value = true
   warnings.value = []
   missingApis.value = []
+  historyError.value = null
+  historySourceMeta.value = {
+    source: null,
+    requestedSource: null,
+    warning: null,
+  }
   try {
     // 全量加载负责同步 quote / bars / factors 三类数据，并重建两张图表。
     const result = await fetchMarketBundle(normalized.normalized, days.value)
@@ -317,8 +417,13 @@ async function loadMarket() {
     bars.value = result.data.bars
     intraday.value = result.data.intraday
     factors.value = result.data.factors
+    historySourceMeta.value = result.data.historySourceMeta
+    historyError.value = result.data.historyError
 
-    rebuildKline()
+    if (bars.value.length > 0)
+      rebuildKline()
+    else
+      clearKline()
     rebuildIntraday()
 
     if (result.warnings.length > 0)
@@ -368,6 +473,18 @@ onUnmounted(() => {
             </template>
             <n-space vertical :size="SPACING.sm">
               <n-text>当前来源：{{ sourceText }}</n-text>
+              <n-text depth="3">
+                日线来源：{{ historySourceText }}
+              </n-text>
+              <n-text v-if="historyRequestedSourceText && historyActualSourceText" depth="3">
+                日线全局配置：{{ historyRequestedSourceText }} / 实际生效：{{ historyActualSourceText }}
+              </n-text>
+              <n-text v-if="actualSourceText" depth="3">
+                实时来源：{{ actualSourceText }}
+              </n-text>
+              <n-text v-if="requestedSourceText" depth="3">
+                实时全局配置：{{ requestedSourceText }}
+              </n-text>
               <n-text v-if="missingApis.length > 0" depth="3">
                 缺失接口：{{ missingApis.join(', ') }}
               </n-text>
@@ -456,7 +573,19 @@ onUnmounted(() => {
     <n-grid :cols="24" :x-gap="GRID_GAP.outer" :y-gap="GRID_GAP.outer" responsive="screen">
       <n-grid-item :span="24" :l-span="16">
         <n-card title="日线 K 线图" size="small">
-          <div ref="klineRef" :style="primaryChartStyle" />
+          <n-space vertical :size="SPACING.sm">
+            <n-text depth="3">
+              日线来源：{{ historySourceText }}
+            </n-text>
+            <n-text v-if="historyRequestedSourceText && historyActualSourceText" depth="3">
+              全局配置：{{ historyRequestedSourceText }} / 实际生效：{{ historyActualSourceText }}
+            </n-text>
+            <n-alert v-if="historyError" type="warning" :show-icon="false">
+              {{ historyError }}
+            </n-alert>
+            <div v-if="bars.length > 0" ref="klineRef" :style="primaryChartStyle" />
+            <n-empty v-else :description="historyError || '暂无历史日线数据'" />
+          </n-space>
         </n-card>
       </n-grid-item>
 
@@ -541,6 +670,12 @@ onUnmounted(() => {
               <n-descriptions bordered :column="1" size="small" label-placement="left">
                 <n-descriptions-item label="股票">
                   {{ quote.stockCode }} - {{ quote.stockName }}
+                </n-descriptions-item>
+                <n-descriptions-item v-if="actualSourceText" label="实时来源">
+                  {{ actualSourceText }}
+                  <template v-if="requestedSourceText">
+                    （全局配置：{{ requestedSourceText }}）
+                  </template>
                 </n-descriptions-item>
                 <n-descriptions-item label="开盘 / 最高 / 最低">
                   {{ quote.open ?? '--' }} / {{ quote.high ?? '--' }} / {{ quote.low ?? '--' }}
