@@ -7,6 +7,7 @@ import type { FactorSnapshot, IntradayPoint, MarketSourceMeta } from '@/types/ma
 import type { StockHistoryPoint } from '@/types/stocks'
 import { fetchMarketBundle, fetchQuoteOnly } from '@/services/market-service'
 import { formatDateTime, validateAShareMarketCode } from '@/utils/stock'
+import { onActivated, onDeactivated } from 'vue'
 import type { CSSProperties } from 'vue'
 
 // 行情中心 = 全量行情加载 + 分时轮询刷新，两套数据源最终汇总到同一块看板里。
@@ -45,6 +46,7 @@ const klineOptions = ref<ECOption>({})
 const intradayOptions = ref<ECOption>({})
 
 let refreshTimer: number | null = null
+let hasActivatedOnce = false
 
 function stopPolling() {
   if (refreshTimer != null) {
@@ -450,6 +452,24 @@ watch(autoRefresh, () => {
 onMounted(async () => {
   await loadMarket()
   startPolling()
+})
+
+onActivated(async () => {
+  if (!hasActivatedOnce) {
+    hasActivatedOnce = true
+    return
+  }
+
+  try {
+    await refreshQuoteOnly()
+  }
+  finally {
+    startPolling()
+  }
+})
+
+onDeactivated(() => {
+  stopPolling()
 })
 
 onUnmounted(() => {

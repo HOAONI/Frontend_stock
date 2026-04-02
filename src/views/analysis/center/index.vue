@@ -14,6 +14,7 @@ import type { CSSProperties } from 'vue'
 // 分析中心同时承载任务提交、流式队列、历史报告和阶段详情，所以状态会拆得比较细。
 const brokerAccountStore = useBrokerAccountStore()
 const themeVars = useThemeVars()
+const router = useRouter()
 
 // 提交区状态。
 const stockCode = ref('')
@@ -738,6 +739,16 @@ async function submitAnalysis() {
   }
 }
 
+function toAgentChatWithStock() {
+  const value = stockCode.value.trim()
+  router.push({
+    path: '/analysis/agent-chat',
+    query: value
+      ? { stockCode: value }
+      : {},
+  })
+}
+
 watch(executionMode, () => {
   executionError.value = ''
 })
@@ -769,6 +780,9 @@ onUnmounted(() => {
           <template #header-extra>
             <n-space :size="SPACING.sm" :wrap="true" align="center">
               <n-select v-model:value="executionMode" :options="executionModeOptions" style="width: 180px;" />
+              <n-button tertiary @click="toAgentChatWithStock">
+                去 Agent问股
+              </n-button>
               <n-button type="primary" :loading="submitting" @click="submitAnalysis">
                 提交分析
               </n-button>

@@ -18,7 +18,7 @@ const contentStyle = computed(() => {
         <component
           :is="Component"
           v-if="appStore.loadFlag && route.meta.keepAlive"
-          :key="route.fullPath"
+          :key="route.name ?? route.path"
         />
       </KeepAlive>
       <component

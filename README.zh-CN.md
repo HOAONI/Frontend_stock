@@ -6,6 +6,7 @@
 
 - AI 分析中心：提交分析任务、查看运行队列、查看历史报告和阶段详情。
 - AI 调度中心：查看调度健康、任务列表、任务详情和重试/重跑/取消等动作。
+- Agent 问股：通过流式对话查看组合建议、候选订单和模拟盘执行结果。
 - 行情与策略展示：查看行情快照、K 线、指标和派生因子。
 - 回测中心：同时支持策略回测与 Agent 回放。
 - 交易账户中心：管理模拟盘绑定、资金变更、账户摘要和近期委托/成交。
@@ -39,9 +40,18 @@ pnpm typecheck
 pnpm lint
 ```
 
+如果你在当前聚合工作区 `/Users/hoaon/Desktop/毕设相关/project/v4` 内做联调，优先在工作区根目录执行：
+
+```bash
+bash scripts/system/start.sh
+```
+
+这个脚本会统一启动 `Frontend_stock / Backend_stock / Agent_stock`，并同步 `AGENT_SERVICE_AUTH_TOKEN`、`VITE_PROXY_TARGET`、`VITE_API_BASE_URL`。`Agent 问股` 页面依赖三者同时可用，不建议分别手工启动。
+
 - `pnpm dev`：前台启动 Vite 开发服务，当前终端退出或 `Ctrl+C` 后进程结束
 - `pnpm start`：后台启动当前前端项目，自动写入 PID 和日志，并等待 `http://127.0.0.1:5173` 就绪
 - `pnpm stop`：停止由当前仓库托管的前端进程，并清理 5173 端口占用
+- `pnpm build`：先执行类型检查，再构建生产包
 
 后台启停脚本也可以直接调用：
 
@@ -112,6 +122,7 @@ bash scripts/system/stop.sh
 - 首页：[src/views/home/index.vue](/Users/hoaon/Desktop/毕设相关/project/v4/Frontend_stock/src/views/home/index.vue)
 - 分析中心：[src/views/analysis/center/index.vue](/Users/hoaon/Desktop/毕设相关/project/v4/Frontend_stock/src/views/analysis/center/index.vue)
 - 调度中心：[src/views/analysis/scheduler/index.vue](/Users/hoaon/Desktop/毕设相关/project/v4/Frontend_stock/src/views/analysis/scheduler/index.vue)
+- Agent 问股：[src/views/analysis/agent-chat/index.vue](/Users/hoaon/Desktop/毕设相关/project/v4/Frontend_stock/src/views/analysis/agent-chat/index.vue)
 - 行情中心：[src/views/market/center/index.vue](/Users/hoaon/Desktop/毕设相关/project/v4/Frontend_stock/src/views/market/center/index.vue)
 - 回测中心：[src/views/backtest/center/index.vue](/Users/hoaon/Desktop/毕设相关/project/v4/Frontend_stock/src/views/backtest/center/index.vue)
 - 交易账户中心：[src/views/profile/trading/index.vue](/Users/hoaon/Desktop/毕设相关/project/v4/Frontend_stock/src/views/profile/trading/index.vue)

@@ -8,6 +8,7 @@
 
 - AI 分析中心：提交分析任务、查看执行状态、失败详情、历史记录与报告摘要
 - 调度中心：展示任务队列、运行态信息、调度状态与异步执行链路
+- Agent 问股：通过流式对话查看组合建议、候选订单和模拟盘执行结果
 - 行情与策略展示：查看股票、市场信息和策略相关数据
 - 回测与统计：触发策略回测，查看收益、持仓、订单、成交与 AI 解读
 - 个人配置与交易账户中心：维护模拟盘、账户参数和个人偏好
@@ -88,6 +89,16 @@ VITE_BACKTEST_RUN_TIMEOUT=150000
 
 ### 启动开发服务
 
+如果你在当前聚合工作区 `/Users/hoaon/Desktop/毕设相关/project/v4` 内联调，请优先回到工作区根目录执行：
+
+```bash
+bash scripts/system/start.sh
+```
+
+该脚本会统一启动 `Frontend_stock / Backend_stock / Agent_stock`，并同步 `AGENT_SERVICE_AUTH_TOKEN`、`VITE_PROXY_TARGET`、`VITE_API_BASE_URL` 等联调配置。`Agent 问股` 页面依赖三者同时可用，不建议分别手工启动。
+
+只开发前端页面且不需要联调时，再单独运行：
+
 ```bash
 pnpm dev
 ```
@@ -113,18 +124,22 @@ pnpm stop
 其中：
 
 - `pnpm dev`：启动 Vite 开发环境
-- `pnpm build`：构建生产包
+- `pnpm build`：先执行类型检查，再构建生产包
 - `pnpm typecheck`：执行 Vue/TypeScript 类型检查
 - `pnpm lint`：执行 ESLint 和类型检查
 - `pnpm start` / `pnpm stop`：使用仓库内脚本启动或停止前端进程
 
 ## 全链路运行说明
 
-如果你是在一台空白机器上把 `Frontend_stock`、`Backend_stock`、`Agent_stock` 三个仓库克隆到同一父目录后做联调，请直接参考：
+如果你是在一台空白机器上把 `Frontend_stock`、`Backend_stock`、`Agent_stock` 三个仓库克隆到同一父目录后做联调，请优先使用聚合工作区根目录的：
+
+```bash
+bash scripts/system/start.sh
+```
+
+如果需要从零搭建环境，再参考：
 
 - [StockSystemHub 主安装文档](https://github.com/HOAONI/StockSystemHub/blob/main/INSTALL_FULL_STACK_FROM_SCRATCH.md)
-
-只有当你自己额外维护了一个带根目录聚合脚本的工作区时，才需要使用工作区根目录的 `scripts/system/*.sh`。
 
 ## License
 

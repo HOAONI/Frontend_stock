@@ -179,6 +179,10 @@ function toAnalysis() {
   router.push('/analysis/center')
 }
 
+function toAgentChat() {
+  router.push('/analysis/agent-chat')
+}
+
 function toTradingCenter() {
   router.push('/profile/trading')
 }
@@ -458,6 +462,9 @@ onMounted(async () => {
               </n-button>
               <n-button secondary @click="toAnalysis">
                 进入分析中心
+              </n-button>
+              <n-button secondary type="primary" @click="toAgentChat">
+                进入 Agent问股
               </n-button>
               <n-button tertiary @click="toTradingCenter">
                 交易账户中心
