@@ -24,6 +24,8 @@ defineProps<{
   systemModelText: string
   systemBaseUrlText: string
   providerOptions: Array<{ label: string, value: PersonalAiProvider }>
+  executionPolicyOptions: Array<{ label: string, value: string }>
+  responseStyleOptions: Array<{ label: string, value: string }>
   clientInfo: PersonalConfigClientInfo
   hasPendingChanges: boolean
   hasPersonalAiToken: boolean
@@ -186,6 +188,44 @@ const notificationItems = [
                     :min="0"
                     :max="100"
                   />
+                </n-form-item-gi>
+              </n-grid>
+            </n-form>
+          </n-card>
+
+          <n-card embedded title="Agent 对话偏好">
+            <n-form label-placement="top" :show-feedback="false">
+              <n-grid cols="1 s:2 m:2" responsive="screen" :x-gap="16" :y-gap="8">
+                <n-form-item-gi label="条件交易执行策略">
+                  <n-select
+                    v-model:value="settings.agentChat.executionPolicy"
+                    :options="executionPolicyOptions"
+                  />
+                </n-form-item-gi>
+
+                <n-form-item-gi label="回复风格">
+                  <n-select
+                    v-model:value="settings.agentChat.responseStyle"
+                    :options="responseStyleOptions"
+                  />
+                </n-form-item-gi>
+
+                <n-form-item-gi label="启用确认快捷语">
+                  <n-space align="center" justify="space-between" style="width: 100%">
+                    <n-switch v-model:value="settings.agentChat.confirmationShortcutsEnabled" />
+                    <n-text depth="3">
+                      支持“确认”“就按刚才的来”这类承接语句。
+                    </n-text>
+                  </n-space>
+                </n-form-item-gi>
+
+                <n-form-item-gi label="承接上一轮焦点股票">
+                  <n-space align="center" justify="space-between" style="width: 100%">
+                    <n-switch v-model:value="settings.agentChat.followupFocusResolutionEnabled" />
+                    <n-text depth="3">
+                      支持“那就买吧”沿用上一轮正在讨论的标的。
+                    </n-text>
+                  </n-space>
                 </n-form-item-gi>
               </n-grid>
             </n-form>

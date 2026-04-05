@@ -18,6 +18,7 @@ const {
   currentAiSourceText,
   currentAiSourceType,
   displayName,
+  executionPolicyOptions,
   goTradingCenter,
   hasPendingChanges,
   hasPersonalAiToken,
@@ -35,6 +36,7 @@ const {
   personalProviderInput,
   providerOptions,
   reloadFromServer,
+  responseStyleOptions,
   roleText,
   saveAiBinding,
   saveAll,
@@ -100,6 +102,8 @@ const {
           :system-model-text="systemModelText"
           :system-base-url-text="systemBaseUrlText"
           :provider-options="providerOptions"
+          :execution-policy-options="executionPolicyOptions"
+          :response-style-options="responseStyleOptions"
           :client-info="clientInfo"
           :has-pending-changes="hasPendingChanges"
           :has-personal-ai-token="hasPersonalAiToken"

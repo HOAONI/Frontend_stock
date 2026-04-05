@@ -1,6 +1,7 @@
 /** 分析中心接口封装，负责提交分析任务、查询队列和读取历史报告。 */
 import type {
   AnalysisRequest,
+  AnalysisRecordSource,
   AnalysisResult,
   HistoryItem,
   HistoryListResponse,
@@ -20,6 +21,10 @@ function normalizeOptionalText(value: unknown): string | null {
   return normalized || null
 }
 
+function normalizeRecordSource(value: unknown): AnalysisRecordSource {
+  return value === 'agent_chat' ? 'agent_chat' : 'analysis_center'
+}
+
 function normalizeHistoryStatus(item: Partial<HistoryItem>): HistoryItem['status'] {
   if (item.status === 'completed' || item.status === 'failed')
     return item.status
@@ -37,6 +42,7 @@ function normalizeHistoryItem(input: unknown): HistoryItem {
     taskId,
     stockCode: normalizeOptionalText(item.stockCode) || '',
     stockName: normalizeOptionalText(item.stockName),
+    recordSource: normalizeRecordSource(item.recordSource),
     reportType: normalizeOptionalText(item.reportType) ?? undefined,
     sentimentScore: item.sentimentScore ?? null,
     operationAdvice: normalizeOptionalText(item.operationAdvice),
@@ -45,6 +51,17 @@ function normalizeHistoryItem(input: unknown): HistoryItem {
       ? normalizeOptionalText(item.errorMessage) || '分析失败（无详细错误）'
       : normalizeOptionalText(item.errorMessage),
     createdAt: normalizeOptionalText(item.createdAt) || '',
+  }
+}
+
+function normalizeAnalysisReport(input: unknown): AnalysisResult['report'] {
+  const report = toCamelCase<AnalysisResult['report']>(input)
+  return {
+    ...report,
+    meta: {
+      ...report.meta,
+      recordSource: normalizeRecordSource(report.meta?.recordSource),
+    },
   }
 }
 
@@ -158,7 +175,7 @@ export async function getHistoryList(params: {
 /** 根据 queryId 读取一份完整历史报告。 */
 export async function getHistoryDetail(queryId: string): Promise<AnalysisResult['report']> {
   const { data } = await client.get(`/api/v1/history/${queryId}`)
-  return toCamelCase<AnalysisResult['report']>(data)
+  return normalizeAnalysisReport(data)
 }
 
 /** 读取历史报告关联的新闻情报，供详情面板直接展示。 */

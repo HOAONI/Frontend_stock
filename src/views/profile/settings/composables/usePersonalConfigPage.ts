@@ -1,5 +1,10 @@
 import type { AxiosError } from 'axios'
-import type { PersonalAiProvider, UpdateUserSettingsRequest } from '@/types/user-settings'
+import type {
+  AgentChatExecutionPolicy,
+  AgentChatResponseStyle,
+  PersonalAiProvider,
+  UpdateUserSettingsRequest,
+} from '@/types/user-settings'
 import type {
   PersonalConfigClientInfo,
   PersonalConfigDetailTab,
@@ -122,12 +127,21 @@ export function usePersonalConfigPage() {
     { label: 'OpenAI', value: 'openai' as PersonalAiProvider },
     { label: 'SiliconFlow', value: 'siliconflow' as PersonalAiProvider },
   ]
+  const executionPolicyOptions = [
+    { label: '条件满足直接执行', value: 'auto_execute_if_condition_met' as AgentChatExecutionPolicy },
+    { label: '始终先确认', value: 'confirm_before_execute' as AgentChatExecutionPolicy },
+  ]
+  const responseStyleOptions = [
+    { label: '简洁事实型', value: 'concise_factual' as AgentChatResponseStyle },
+    { label: '平衡说明型', value: 'balanced' as AgentChatResponseStyle },
+    { label: '详细解释型', value: 'detailed' as AgentChatResponseStyle },
+  ]
 
   const username = computed(() => normalizeText(sessionStore.currentUser?.username, '访客'))
   const displayName = computed(() => normalizeText(sessionStore.currentUser?.displayName || sessionStore.currentUser?.username, '访客'))
   const userIdText = computed(() => normalizeText(sessionStore.currentUser?.id, '未分配'))
   const roleText = computed(() => sessionStore.isAdmin ? '管理员' : '普通用户')
-  const scopeText = '仅影响 Agent 的 paper 运行默认参数'
+  const scopeText = '仅影响 Agent 的 paper 运行默认参数与对话行为'
   const lastSavedAt = computed(() => {
     if (!userSettingsStore.settings.updatedAt)
       return '尚未同步'
@@ -145,6 +159,12 @@ export function usePersonalConfigPage() {
       positionMaxPct: userSettingsStore.settings.strategy.positionMaxPct,
       stopLossPct: userSettingsStore.settings.strategy.stopLossPct,
       takeProfitPct: userSettingsStore.settings.strategy.takeProfitPct,
+    },
+    agentChat: {
+      executionPolicy: userSettingsStore.settings.agentChat.executionPolicy,
+      confirmationShortcutsEnabled: userSettingsStore.settings.agentChat.confirmationShortcutsEnabled,
+      followupFocusResolutionEnabled: userSettingsStore.settings.agentChat.followupFocusResolutionEnabled,
+      responseStyle: userSettingsStore.settings.agentChat.responseStyle,
     },
   }))
 
@@ -354,6 +374,10 @@ export function usePersonalConfigPage() {
       issues.push('止损阈值需在 0-100 之间。')
     if (settings.strategy.takeProfitPct < 0 || settings.strategy.takeProfitPct > 100)
       issues.push('止盈阈值需在 0-100 之间。')
+    if (!['auto_execute_if_condition_met', 'confirm_before_execute'].includes(settings.agentChat.executionPolicy))
+      issues.push('条件交易执行策略不合法。')
+    if (!['concise_factual', 'balanced', 'detailed'].includes(settings.agentChat.responseStyle))
+      issues.push('Agent 回复风格不合法。')
 
     return issues
   }
@@ -584,6 +608,7 @@ export function usePersonalConfigPage() {
     currentAiSourceText,
     currentAiSourceType,
     displayName,
+    executionPolicyOptions,
     goTradingCenter,
     hasPendingChanges,
     hasPersonalAiToken,
@@ -603,6 +628,7 @@ export function usePersonalConfigPage() {
     providerOptions,
     reloadFromServer,
     resetPasswordForm,
+    responseStyleOptions,
     roleText,
     saveAiBinding,
     saveAll,

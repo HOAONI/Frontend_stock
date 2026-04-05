@@ -53,6 +53,24 @@ function normalizeAiSettings(settings: UserSettingsResponse): UserSettingsRespon
   }
 }
 
+function normalizeAgentChatSettings(settings: UserSettingsResponse): UserSettingsResponse['agentChat'] {
+  const rawExecutionPolicy = String(settings.agentChat?.executionPolicy || '')
+  const executionPolicy = rawExecutionPolicy === 'confirmBeforeExecute'
+    ? 'confirm_before_execute'
+    : rawExecutionPolicy
+
+  return {
+    executionPolicy: executionPolicy === 'confirm_before_execute'
+      ? 'confirm_before_execute'
+      : 'auto_execute_if_condition_met',
+    confirmationShortcutsEnabled: settings.agentChat?.confirmationShortcutsEnabled ?? true,
+    followupFocusResolutionEnabled: settings.agentChat?.followupFocusResolutionEnabled ?? true,
+    responseStyle: settings.agentChat?.responseStyle === 'balanced' || settings.agentChat?.responseStyle === 'detailed'
+      ? settings.agentChat.responseStyle
+      : 'concise_factual',
+  }
+}
+
 /**
  * 个人设置 store 负责把后端配置归一化后缓存到前端，
  * 避免页面直接处理 null、旧字段和 source/effective 的差异。
@@ -77,10 +95,22 @@ export const useUserSettingsStore = defineStore('user-settings-store', {
         },
         ai: normalizeAiSettings(settings),
         strategy: {
+          riskProfile: settings.strategy?.riskProfile === 'conservative' || settings.strategy?.riskProfile === 'aggressive'
+            ? settings.strategy.riskProfile
+            : 'balanced',
+          analysisStrategy: settings.strategy?.analysisStrategy === 'ma'
+            || settings.strategy?.analysisStrategy === 'rsi'
+            || settings.strategy?.analysisStrategy === 'custom'
+            ? settings.strategy.analysisStrategy
+            : 'auto',
+          maxSingleTradeAmount: settings.strategy?.maxSingleTradeAmount != null
+            ? Number(settings.strategy.maxSingleTradeAmount)
+            : null,
           positionMaxPct: Number(settings.strategy?.positionMaxPct ?? 30),
           stopLossPct: Number(settings.strategy?.stopLossPct ?? 8),
           takeProfitPct: Number(settings.strategy?.takeProfitPct ?? 15),
         },
+        agentChat: normalizeAgentChatSettings(settings),
         updatedAt: settings.updatedAt || '',
       }
     },

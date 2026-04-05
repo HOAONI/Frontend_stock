@@ -7,11 +7,14 @@ export interface AnalysisRequest {
   executionMode?: 'auto' | 'paper'
 }
 
+export type AnalysisRecordSource = 'analysis_center' | 'agent_chat'
+
 /** 报告头信息，描述这份报告对应的股票、查询编号和生成时间。 */
 export interface ReportMeta {
   queryId: string
   stockCode: string
   stockName: string
+  recordSource?: AnalysisRecordSource | null
   reportType: 'simple' | 'detailed'
   createdAt: string
   currentPrice?: number | null
@@ -109,6 +112,7 @@ export interface HistoryItem {
   taskId?: string | null
   stockCode: string
   stockName?: string | null
+  recordSource?: AnalysisRecordSource | null
   reportType?: string
   sentimentScore?: number | null
   operationAdvice?: string | null

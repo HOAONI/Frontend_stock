@@ -37,6 +37,12 @@ export async function updateMyUserSettings(payload: UpdateUserSettingsRequest): 
 
   if (payload.strategy) {
     const strategy: Record<string, unknown> = {}
+    if (payload.strategy.riskProfile !== undefined)
+      strategy.riskProfile = payload.strategy.riskProfile
+    if (payload.strategy.analysisStrategy !== undefined)
+      strategy.analysisStrategy = payload.strategy.analysisStrategy
+    if (payload.strategy.maxSingleTradeAmount !== undefined)
+      strategy.maxSingleTradeAmount = payload.strategy.maxSingleTradeAmount
     if (payload.strategy.positionMaxPct !== undefined)
       strategy.positionMaxPct = payload.strategy.positionMaxPct
     if (payload.strategy.stopLossPct !== undefined)
@@ -44,6 +50,19 @@ export async function updateMyUserSettings(payload: UpdateUserSettingsRequest): 
     if (payload.strategy.takeProfitPct !== undefined)
       strategy.takeProfitPct = payload.strategy.takeProfitPct
     body.strategy = strategy
+  }
+
+  if (payload.agentChat) {
+    const agentChat: Record<string, unknown> = {}
+    if (payload.agentChat.executionPolicy !== undefined)
+      agentChat.executionPolicy = payload.agentChat.executionPolicy
+    if (payload.agentChat.confirmationShortcutsEnabled !== undefined)
+      agentChat.confirmationShortcutsEnabled = payload.agentChat.confirmationShortcutsEnabled
+    if (payload.agentChat.followupFocusResolutionEnabled !== undefined)
+      agentChat.followupFocusResolutionEnabled = payload.agentChat.followupFocusResolutionEnabled
+    if (payload.agentChat.responseStyle !== undefined)
+      agentChat.responseStyle = payload.agentChat.responseStyle
+    body.agentChat = agentChat
   }
 
   const { data } = await client.put('/api/v1/users/me/settings', body)

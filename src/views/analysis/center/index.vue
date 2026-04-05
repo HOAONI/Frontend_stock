@@ -31,6 +31,7 @@ const executionModeOptions = [
 ]
 
 const historyItems = ref<HistoryItem[]>([])
+const recentHistoryItems = ref<HistoryItem[]>([])
 const historyListTotal = ref(0)
 const historyPage = ref(1)
 const historyLimit = ref(5)
@@ -79,7 +80,7 @@ const streamEnabled = ref(true)
 
 const {
   runningTasks,
-  filteredRecentTasks,
+  recentTasks,
   recentFilter,
   lastSyncedAt,
   handleEventTask,
@@ -122,20 +123,22 @@ const recentReportModalTitle = computed(() => {
   return `历史报告详情 · ${recentReportModalReport.value.meta.stockCode}`
 })
 
-const RECENT_REPORT_MATCH_WINDOW_MS = 30 * 60 * 1000
 const RECENT_RESULT_VISIBLE_LIMIT = 3
+const RECENT_HISTORY_FETCH_LIMIT = 20
 
 interface RecentResultDisplayItem {
-  taskId: string
+  key: string
+  taskId: string | null
   stockCode: string
   stockName: string
+  recordSource: HistoryItem['recordSource'] | null
   status: 'completed' | 'failed' | 'cancelled'
   finishedAt: string
   statusTagType: 'success' | 'error' | 'warning'
   summaryText: string
   queryId: string | null
-  canOpenReport: boolean
-  unmatchedReason: string
+  actionText: string
+  canOpenDetail: boolean
 }
 
 interface HistoryResultDisplayItem {
@@ -144,6 +147,7 @@ interface HistoryResultDisplayItem {
   taskId: string | null
   stockCode: string
   stockName: string
+  recordSource: HistoryItem['recordSource']
   finishedAt: string
   summaryText: string
   status: 'completed' | 'failed'
@@ -161,6 +165,7 @@ interface AnalysisOverviewCard {
 
 let fallbackPollTimer: number | null = null
 let modalLoadSeq = 0
+let recentHistoryLoadSeq = 0
 
 function resolveTaskId(queryId: string): string | null {
   const hit = getTaskById(queryId)
@@ -195,6 +200,13 @@ async function refreshTasks(options: RefreshTaskOptions = {}) {
   }
 }
 
+async function refreshTaskSnapshotAndRecentResults() {
+  await Promise.allSettled([
+    refreshTasks({ reason: 'manual' }),
+    refreshRecentHistory(false),
+  ])
+}
+
 async function loadSimulationStatus(silent = false) {
   try {
     await brokerAccountStore.loadSimulationStatus()
@@ -214,14 +226,19 @@ const { isConnected } = useTaskStream({
   onTaskStarted: handleEventTask,
   onTaskCompleted: async (task) => {
     handleEventTask(task)
-    await Promise.all([
+    await Promise.allSettled([
+      refreshRecentHistory(true),
       refreshHistory(true),
       refreshTasks({ reason: 'stream_completed', silent: true }),
     ])
   },
-  onTaskFailed: (task) => {
+  onTaskFailed: async (task) => {
     handleEventTask(task)
-    void refreshTasks({ reason: 'stream_terminal', silent: true })
+    await Promise.allSettled([
+      refreshRecentHistory(true),
+      refreshHistory(true),
+      refreshTasks({ reason: 'stream_terminal', silent: true }),
+    ])
   },
   onTaskCancelled: (task) => {
     handleEventTask(task)
@@ -268,6 +285,14 @@ function historyStatusText(status: HistoryItem['status']): string {
   return status === 'completed' ? '成功' : '失败'
 }
 
+function isAgentChatRecord(recordSource: HistoryItem['recordSource'] | AnalysisReport['meta']['recordSource']): boolean {
+  return recordSource === 'agent_chat'
+}
+
+function recordSourceText(recordSource: HistoryItem['recordSource'] | AnalysisReport['meta']['recordSource']): string {
+  return isAgentChatRecord(recordSource) ? 'Agent问答' : '分析中心'
+}
+
 function resetMainReportState() {
   selectedQueryId.value = ''
   selectedReport.value = null
@@ -305,86 +330,59 @@ function toTimestamp(value: string | null | undefined): number {
 }
 
 const recentResultItems = computed<RecentResultDisplayItem[]>(() => {
-  const items: RecentResultDisplayItem[] = []
-  const visibleTasks = filteredRecentTasks.value.slice(0, RECENT_RESULT_VISIBLE_LIMIT)
-
-  visibleTasks.forEach((task) => {
-    const finishedAt = task.completedAt || task.createdAt
-
-    if (task.status === 'failed') {
-      items.push({
-        taskId: task.taskId,
-        stockCode: task.stockCode,
-        stockName: task.stockName || '--',
-        status: 'failed',
-        finishedAt,
-        statusTagType: 'error',
-        summaryText: task.error || task.message || '任务失败（无详细错误）',
-        queryId: null,
-        canOpenReport: false,
-        unmatchedReason: '未关联报告',
-      })
-      return
-    }
-
-    if (task.status === 'cancelled') {
-      items.push({
-        taskId: task.taskId,
-        stockCode: task.stockCode,
-        stockName: task.stockName || '--',
-        status: 'cancelled',
-        finishedAt,
-        statusTagType: 'warning',
-        summaryText: task.message || '任务已取消',
-        queryId: null,
-        canOpenReport: false,
-        unmatchedReason: '任务未执行完成',
-      })
-      return
-    }
-
-    if (task.status !== 'completed')
-      return
-
-    const taskTimestamp = toTimestamp(finishedAt)
-    const stockHistories = historyItems.value.filter(item => item.status === 'completed' && item.stockCode === task.stockCode)
-
-    let hasBestMatch = false
-    let bestMatchStockName = ''
-    let bestMatchAdvice = ''
-    let bestMatchQueryId: string | null = null
-    let minTimeDiff = Number.POSITIVE_INFINITY
-
-    stockHistories.forEach((item) => {
-      const diff = Math.abs(taskTimestamp - toTimestamp(item.createdAt))
-      if (diff < minTimeDiff) {
-        minTimeDiff = diff
-        hasBestMatch = true
-        bestMatchStockName = item.stockName || ''
-        bestMatchAdvice = item.operationAdvice || ''
-        bestMatchQueryId = item.queryId || null
-      }
-    })
-
-    const matched = hasBestMatch && minTimeDiff <= RECENT_REPORT_MATCH_WINDOW_MS
-    const matchedQueryId = matched ? bestMatchQueryId : null
-
-    // 完成态任务和历史报告不是同一接口来源，这里用股票代码 + 时间窗口做近似匹配。
-    items.push({
+  const selectedFilter = recentFilter.value
+  const historyItemsForRecent = selectedFilter === 'cancelled'
+    ? []
+    : recentHistoryItems.value
+  const cancelledItems = recentTasks.value
+    .filter(task => task.status === 'cancelled')
+    .map<RecentResultDisplayItem>(task => ({
+      key: `cancelled:${task.taskId}`,
       taskId: task.taskId,
       stockCode: task.stockCode,
-      stockName: task.stockName || bestMatchStockName || '--',
-      status: 'completed',
-      finishedAt,
-      statusTagType: 'success',
-      summaryText: (matched ? bestMatchAdvice : '') || task.message || (matched ? '分析已完成' : '分析已完成，未在当前历史页匹配到报告'),
-      queryId: matchedQueryId,
-      canOpenReport: Boolean(matchedQueryId),
-      unmatchedReason: matched ? '' : '未匹配历史记录',
-    })
+      stockName: task.stockName || '--',
+      recordSource: 'analysis_center',
+      status: 'cancelled',
+      finishedAt: task.completedAt || task.createdAt,
+      statusTagType: 'warning',
+      summaryText: task.message || '任务已取消',
+      queryId: null,
+      actionText: '暂无详情',
+      canOpenDetail: false,
+    }))
+
+  const mappedHistoryItems = historyItemsForRecent.map<RecentResultDisplayItem>((item) => {
+    const isCompleted = item.status === 'completed'
+    const queryId = item.queryId || null
+    const taskId = item.taskId || item.queryId || null
+
+    return {
+      key: `${item.status}:${taskId || queryId || `${item.stockCode}:${item.createdAt}`}`,
+      taskId,
+      stockCode: item.stockCode,
+      stockName: item.stockName || '--',
+      recordSource: item.recordSource || 'analysis_center',
+      status: item.status,
+      finishedAt: item.createdAt,
+      statusTagType: isCompleted ? 'success' : 'error',
+      summaryText: isCompleted
+        ? item.operationAdvice || '--'
+        : item.errorMessage || '分析失败（无详细错误）',
+      queryId,
+      actionText: isCompleted ? '查看报告' : '查看失败详情',
+      canOpenDetail: isCompleted ? Boolean(queryId) : Boolean(taskId),
+    }
   })
 
-  return items
+  const mergedItems = selectedFilter === 'cancelled'
+    ? cancelledItems
+    : selectedFilter === 'all'
+      ? [...mappedHistoryItems, ...cancelledItems]
+      : mappedHistoryItems
+
+  return mergedItems
+    .sort((left, right) => toTimestamp(right.finishedAt) - toTimestamp(left.finishedAt))
+    .slice(0, RECENT_RESULT_VISIBLE_LIMIT)
 })
 
 const analysisOverviewCards = computed<AnalysisOverviewCard[]>(() => {
@@ -428,6 +426,7 @@ const historyResultItems = computed<HistoryResultDisplayItem[]>(() => {
       taskId,
       stockCode: item.stockCode,
       stockName: item.stockName || '--',
+      recordSource: item.recordSource || 'analysis_center',
       finishedAt: item.createdAt,
       summaryText: isCompleted
         ? item.operationAdvice || '--'
@@ -576,6 +575,24 @@ async function openFailedHistoryResult(item: HistoryResultDisplayItem) {
 }
 
 async function openRecentResult(item: RecentResultDisplayItem) {
+  if (item.status === 'failed' && item.taskId) {
+    await openFailedHistoryResult({
+      key: item.key,
+      queryId: item.queryId || '',
+      taskId: item.taskId,
+      stockCode: item.stockCode,
+      stockName: item.stockName,
+      recordSource: item.recordSource || 'analysis_center',
+      finishedAt: item.finishedAt,
+      summaryText: item.summaryText,
+      status: 'failed',
+      statusTagType: 'error',
+      actionText: item.actionText,
+      canOpenDetail: item.canOpenDetail,
+    })
+    return
+  }
+
   if (!item.queryId)
     return
   await openReportModalByQueryId(item.queryId)
@@ -621,6 +638,35 @@ async function refreshHistory(resetPage = false) {
   }
   finally {
     historyLoading.value = false
+  }
+}
+
+async function refreshRecentHistory(silent = false) {
+  const currentSeq = ++recentHistoryLoadSeq
+  if (recentFilter.value === 'cancelled') {
+    recentHistoryItems.value = []
+    return
+  }
+
+  const status: HistoryStatusFilter = recentFilter.value === 'all' || recentFilter.value === 'completed' || recentFilter.value === 'failed'
+    ? recentFilter.value
+    : 'all'
+
+  try {
+    const result = await getHistoryList({
+      page: 1,
+      limit: RECENT_HISTORY_FETCH_LIMIT,
+      status,
+    })
+    if (currentSeq !== recentHistoryLoadSeq)
+      return
+    recentHistoryItems.value = result.items
+  }
+  catch {
+    if (currentSeq !== recentHistoryLoadSeq)
+      return
+    if (!silent)
+      window.$message.error('最近结果加载失败')
   }
 }
 
@@ -757,9 +803,14 @@ watch(historyFilter, () => {
   void refreshHistory(true)
 })
 
+watch(recentFilter, () => {
+  void refreshRecentHistory(true)
+})
+
 onMounted(async () => {
   startFallbackPolling()
   await Promise.all([
+    refreshRecentHistory(true),
     refreshHistory(true),
     refreshTasks({ reason: 'init' }),
     loadSimulationStatus(true),
@@ -844,7 +895,7 @@ onUnmounted(() => {
                 <n-text depth="3">
                   最近同步：{{ lastSyncedAt ? formatDateTime(lastSyncedAt) : '--' }}
                 </n-text>
-                <n-button tertiary size="small" :loading="tasksRefreshing" @click="refreshTasks({ reason: 'manual' })">
+                <n-button tertiary size="small" :loading="tasksRefreshing" @click="refreshTaskSnapshotAndRecentResults">
                   手动刷新
                 </n-button>
               </n-space>
@@ -883,7 +934,7 @@ onUnmounted(() => {
 
             <n-empty v-if="recentResultItems.length === 0" description="暂无最近完成、失败或取消任务" />
             <n-list v-else hoverable>
-              <n-list-item v-for="item in recentResultItems" :key="item.taskId">
+              <n-list-item v-for="item in recentResultItems" :key="item.key">
                 <n-card embedded :size="CARD_DENSITY.embedded">
                   <n-space justify="space-between" align="center" :wrap="false" style="width: 100%;">
                     <n-space vertical :size="SPACING.sm" style="min-width: 0; flex: 1;">
@@ -897,15 +948,15 @@ onUnmounted(() => {
                         <n-tag size="small" :type="item.statusTagType">
                           {{ statusLabel(item.status) }}
                         </n-tag>
+                        <n-tag v-if="isAgentChatRecord(item.recordSource)" size="small" type="info">
+                          {{ recordSourceText(item.recordSource) }}
+                        </n-tag>
                       </n-space>
                       <n-text depth="3">
-                        完成时间：{{ formatDateTime(item.finishedAt) }}
+                        结束时间：{{ formatDateTime(item.finishedAt) }}
                       </n-text>
                       <n-text :type="item.status === 'failed' ? 'error' : undefined">
                         {{ item.summaryText }}
-                      </n-text>
-                      <n-text v-if="item.unmatchedReason" depth="3">
-                        {{ item.unmatchedReason }}
                       </n-text>
                     </n-space>
                     <n-button
@@ -913,10 +964,10 @@ onUnmounted(() => {
                       type="primary"
                       tertiary
                       style="flex-shrink: 0;"
-                      :disabled="!item.canOpenReport"
+                      :disabled="!item.canOpenDetail"
                       @click="openRecentResult(item)"
                     >
-                      {{ item.canOpenReport ? '查看报告' : '未关联报告' }}
+                      {{ item.actionText }}
                     </n-button>
                   </n-space>
                 </n-card>
@@ -956,6 +1007,14 @@ onUnmounted(() => {
                       </n-descriptions-item>
                       <n-descriptions-item label="股票名称">
                         {{ selectedReport.meta.stockName }}
+                      </n-descriptions-item>
+                      <n-descriptions-item label="来源">
+                        <n-tag v-if="isAgentChatRecord(selectedReport.meta.recordSource)" size="small" type="info">
+                          {{ recordSourceText(selectedReport.meta.recordSource) }}
+                        </n-tag>
+                        <n-text v-else depth="3">
+                          {{ recordSourceText(selectedReport.meta.recordSource) }}
+                        </n-text>
                       </n-descriptions-item>
                       <n-descriptions-item label="报告时间">
                         {{ formatDateTime(selectedReport.meta.createdAt) }}
@@ -1127,6 +1186,9 @@ onUnmounted(() => {
                       <n-tag size="small" :type="item.statusTagType">
                         {{ historyStatusText(item.status) }}
                       </n-tag>
+                      <n-tag v-if="isAgentChatRecord(item.recordSource)" size="small" type="info">
+                        {{ recordSourceText(item.recordSource) }}
+                      </n-tag>
                     </n-space>
                     <n-text depth="3">
                       结束时间：{{ formatDateTime(item.finishedAt) }}
@@ -1191,6 +1253,14 @@ onUnmounted(() => {
                   </n-descriptions-item>
                   <n-descriptions-item label="股票名称">
                     {{ recentReportModalReport.meta.stockName }}
+                  </n-descriptions-item>
+                  <n-descriptions-item label="来源">
+                    <n-tag v-if="isAgentChatRecord(recentReportModalReport.meta.recordSource)" size="small" type="info">
+                      {{ recordSourceText(recentReportModalReport.meta.recordSource) }}
+                    </n-tag>
+                    <n-text v-else depth="3">
+                      {{ recordSourceText(recentReportModalReport.meta.recordSource) }}
+                    </n-text>
                   </n-descriptions-item>
                   <n-descriptions-item label="报告时间">
                     {{ formatDateTime(recentReportModalReport.meta.createdAt) }}
